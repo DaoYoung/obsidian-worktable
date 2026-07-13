@@ -30,6 +30,10 @@
    - 设置 → BRAT → Add a beta plugin
    - 输入仓库地址：`https://github.com/DaoYoung/obsidian-worktable.git`
 
+> BRAT 从 **GitHub 最新已发布 Release 的附件**读取 `manifest.json`、`main.js` 和 `styles.css`，不是从仓库根目录安装。Release 不能保持为 Draft，并且必须直接附带这些文件。
+>
+> 仓库如果保持 Private，需要先在 BRAT 的 SecretStorage 中配置有权访问该仓库的 GitHub Token，并在添加插件时选择对应 secret；希望直接通过仓库地址安装则需要将仓库设为 Public。
+
 ### 方式二：手动安装发布版本
 
 1. 从 GitHub Release 页面下载最新版本的 `obsidian-worktable.zip`
@@ -273,13 +277,18 @@ npm run verify
 
 1. 更新 `package.json` 和 `manifest.json` 中的版本号
 2. 更新 `versions.json` 添加版本映射
-3. 创建 Git tag：
+3. 确认所有改动已提交并推送，CI 验证通过
+4. 创建并推送与 `manifest.json` 版本一致的 Git tag：
    ```bash
-   git tag v0.1.0
-   git push origin v0.1.0
+   git tag -a v0.2.0 -m "v0.2.0"
+   git push origin v0.2.0
    ```
-4. GitHub Actions 自动构建并创建 Draft Release
-5. 审核后发布 Release
+5. GitHub Actions 运行完整验证，随后自动发布非 Draft Release，并附带：
+   - `main.js`
+   - `manifest.json`
+   - `styles.css`
+   - `obsidian-worktable.zip`
+6. 在 Release 页面确认四个附件齐全；BRAT 随后即可读取最新版本
 
 ## 隐私与安全
 

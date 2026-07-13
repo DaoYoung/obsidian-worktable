@@ -14,35 +14,43 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - name: Setup Node.js 20
-        uses: actions/setup-node@v4
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: "24"
           cache: "npm"
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build
-        run: npm run build
+      - name: Verify release
+        run: npm run verify
 
-      - name: Check artifacts
-        run: npm run check:artifacts
+      - name: Validate tag version
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./manifest.json').version")
+          if [[ "$GITHUB_REF_NAME" != "v$VERSION" ]]; then
+            echo "Tag $GITHUB_REF_NAME does not match manifest version $VERSION" >&2
+            exit 1
+          fi
 
-      - name: Read version
-        id: version
-        run: echo "VERSION=$(node -e "console.log(require('./manifest.json').version)")" >> $GITHUB_OUTPUT
+      - name: Create manual-install archive
+        run: zip -j obsidian-worktable.zip main.js manifest.json styles.css
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          body_path: CHANGELOG.md
-          draft: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
           files: |
             main.js
             manifest.json
             styles.css
+            obsidian-worktable.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

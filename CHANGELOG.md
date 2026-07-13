@@ -5,6 +5,27 @@ All notable changes to Obsidian Worktable will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-07-13
+
+### Added
+
+- Added direct Anthropic-compatible AI settings for provider, API key, base URL,
+  and model, with fallback to the local cloakfetch service.
+- Added dynamic knowledge subject sections and cross-discipline review sampling.
+
+### Changed
+
+- Knowledge and review widgets now honor the configured knowledge file path.
+- Pomodoro recent history now displays the latest three records by default while
+  retaining the complete history for statistics and CSV export.
+- Release automation now publishes BRAT-compatible GitHub Release assets and a
+  manual-install ZIP after the full verification suite passes.
+
+### Fixed
+
+- Fixed Python server test discovery so CI loads `server/server.py` instead of
+  the empty `server` package.
+
 ## [0.1.0] - 2026-07-13
 
 ### Added
@@ -67,4 +88,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Server now requires a generated local-only service token for operational
   routes and validates incoming URLs.
 
+[0.2.0]: https://github.com/DaoYoung/obsidian-worktable/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/DaoYoung/obsidian-worktable/releases/tag/v0.1.0

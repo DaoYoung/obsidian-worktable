@@ -6,6 +6,7 @@ URL validation (SSRF), and secret redaction.
 Does NOT launch CloakBrowser or call AI services.
 """
 
+import importlib.util
 import json
 import os
 import re
@@ -13,14 +14,21 @@ import sys
 import tempfile
 import unittest
 from http.client import HTTPConnection
+from pathlib import Path
 from threading import Thread
 from unittest.mock import MagicMock, patch
 
 
-# Patch module-level browser/browser-fetch before importing server module.
-# Test is launched from the server/ directory so `server` resolves to server.py.
-with patch.dict("sys.modules", {"cloakbrowser": MagicMock()}):
-    import server as server  # noqa: E402
+# Load server.py explicitly so discovery works from both the repository root and
+# the server directory. A regular `import server` resolves to server/__init__.py
+# when CI runs `python -m unittest discover -s server/tests` from the repo root.
+_SERVER_PATH = Path(__file__).resolve().parents[1] / "server.py"
+_SERVER_SPEC = importlib.util.spec_from_file_location("worktable_server", _SERVER_PATH)
+if _SERVER_SPEC is None or _SERVER_SPEC.loader is None:
+    raise ImportError(f"Unable to load server module from {_SERVER_PATH}")
+server = importlib.util.module_from_spec(_SERVER_SPEC)
+with patch.dict("sys.modules", {"cloakbrowser": MagicMock(), "worktable_server": server}):
+    _SERVER_SPEC.loader.exec_module(server)
 
 
 class _TestHTTPConnection(HTTPConnection):
