@@ -1,14 +1,35 @@
 import { MarkdownRenderer } from "obsidian";
-import { KnowledgeService, type KnowledgeData, type MathKnowledge, type WordKnowledge } from "../services/KnowledgeService";
+import {
+  KnowledgeService,
+  type KnowledgeData,
+  type MathKnowledge,
+  type SubjectKnowledge,
+  type WordKnowledge,
+} from "../services/KnowledgeService";
 import type { WidgetContext } from "../types";
 
 interface ReviewSettings {
   knowledgePath?: unknown;
 }
 
+type Discipline = "word" | "math" | "subject";
+
+interface ReviewEntry {
+  id: string;
+  discipline: Discipline;
+  /** Discipline label shown on the card (e.g. "英文词汇", "数学", "物理"). */
+  disciplineLabel: string;
+  /** Word: name (lowercased); Math/Subject: title. */
+  display: string;
+  /** Optional POS annotation for English words. */
+  pos?: string;
+  /** Markdown body to reveal. */
+  def: string;
+}
+
 interface ReviewSelection {
-  word: WordKnowledge;
-  math: MathKnowledge;
+  a: ReviewEntry;
+  b: ReviewEntry;
 }
 
 interface CachedKnowledge {
@@ -17,10 +38,24 @@ interface CachedKnowledge {
   data: KnowledgeData;
 }
 
+interface StoredReview {
+  date?: string;
+  /** Slot 1 — discipline key + entry id. */
+  aDiscipline?: string;
+  aId?: string;
+  /** Slot 2 — discipline key + entry id. */
+  bDiscipline?: string;
+  bId?: string;
+}
+
 const CACHE_KEY = "home-knowledge-cache-v1";
 const HISTORY_KEY = "home-review-history-v1";
 const TODAY_KEY = "home-review-today-v1";
 const CACHE_TTL = 60 * 60 * 1_000;
+/** How many recent items to remember per discipline when drawing a new pair. */
+const RECENT_PER_DISCIPLINE = 10;
+/** Total history retained on disk (per-discipline + global). */
+const HISTORY_MAX = 60;
 
 export function mountReviewWidget(containerEl: HTMLElement, context: WidgetContext): void {
   const { app, component } = context;
@@ -29,8 +64,8 @@ export function mountReviewWidget(containerEl: HTMLElement, context: WidgetConte
     ? settings.knowledgePath.trim()
     : "plans/知识点.md";
   const knowledge = new KnowledgeService(app, knowledgePath);
-  let words: WordKnowledge[] = [];
-  let maths: MathKnowledge[] = [];
+  let data: KnowledgeData = { words: [], maths: [], subjects: [] };
+  let pools: Pool[] = [];
   let disposed = false;
 
   const root = containerEl.createDiv({ cls: "home-review home-review-solo" });
@@ -44,7 +79,7 @@ export function mountReviewWidget(containerEl: HTMLElement, context: WidgetConte
   source.createSpan({ cls: "src-label", text: "📂 内容来源：" });
   const sourceLink = source.createEl("a", { href: "#", text: knowledgePath });
   const footer = root.createDiv({ cls: "home-review-foot" });
-  footer.createSpan({ text: "抽到重复时允许（历史池耗尽后重置）" });
+  footer.createSpan({ text: "每次从两个不同学科各抽 1 条（学科池耗尽后允许重复）" });
   const footerActions = footer.createDiv({ cls: "home-review-foot-actions" });
   const reshuffleButton = footerActions.createEl("button", { text: "↻ 换一组" });
   const reloadButton = footerActions.createEl("button", { text: "🔄 重新加载" });
@@ -82,12 +117,12 @@ export function mountReviewWidget(containerEl: HTMLElement, context: WidgetConte
   async function loadAndRender(force: boolean): Promise<void> {
     reloadButton.disabled = true;
     reloadButton.setText("加载中…");
-    if (!words.length && !maths.length) renderMessage("加载复习内容…");
+    if (!pools.length) renderMessage("加载复习内容…");
     try {
-      const data = await loadKnowledge(force);
+      const fresh = await loadKnowledge(force);
       if (disposed) return;
-      words = Array.isArray(data.words) ? data.words : [];
-      maths = Array.isArray(data.maths) ? data.maths : [];
+      data = fresh;
+      pools = buildPools(data);
       render();
     } catch (error) {
       if (!disposed) renderMessage(`加载失败：${errorMessage(error)}`, true);
@@ -102,34 +137,27 @@ export function mountReviewWidget(containerEl: HTMLElement, context: WidgetConte
       const cached = readJson<CachedKnowledge | null>(CACHE_KEY, null);
       if (cached?.path === knowledgePath && Date.now() - cached.ts < CACHE_TTL) return cached.data;
     }
-    const data = await knowledge.load();
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), path: knowledgePath, data } satisfies CachedKnowledge));
-    return data;
+    const fresh = await knowledge.load();
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), path: knowledgePath, data: fresh } satisfies CachedKnowledge));
+    return fresh;
   }
 
   function render(): void {
-    const used = readJson<string[]>(HISTORY_KEY, []);
-    const usedWords = new Set(used.filter((id) => id.startsWith("w"))).size;
-    const usedMaths = new Set(used.filter((id) => id.startsWith("m"))).size;
-    progress.setText(`近期已抽 单词 ${usedWords}/${words.length} · 数学 ${usedMaths}/${maths.length}`);
-
-    if (!words.length || !maths.length) {
-      const missing = !words.length && !maths.length
-        ? "复习库为空"
-        : !words.length
-          ? "英文词汇为空"
-          : "数学知识点为空";
-      renderEmpty(missing);
+    progress.setText(formatProgress(pools));
+    if (pools.length < 2) {
+      const only = pools[0];
+      renderEmpty(only
+        ? `${only.label} 只有 1 个学科，至少需要 2 个学科才能复习`
+        : "复习库为空");
       return;
     }
-
     const selection = drawSelection();
     if (!selection) {
       renderEmpty("没有可复习的内容");
       return;
     }
     grid.empty();
-    grid.append(createCard(selection.word, "word"), createCard(selection.math, "math"));
+    grid.append(createCard(selection.a), createCard(selection.b));
   }
 
   function renderMessage(message: string, error = false): void {
@@ -152,35 +180,60 @@ export function mountReviewWidget(containerEl: HTMLElement, context: WidgetConte
   }
 
   function drawSelection(): ReviewSelection | null {
-    if (!words.length || !maths.length) return null;
     const date = todayKey();
-    const cached = readJson<{ date?: string; wordId?: string; mathId?: string } | null>(TODAY_KEY, null);
-    if (cached?.date === date) {
-      const word = words.find((item) => item.id === cached.wordId);
-      const math = maths.find((item) => item.id === cached.mathId);
-      if (word && math) return { word, math };
+    const cached = readJson<StoredReview | null>(TODAY_KEY, null);
+    if (cached?.date === date && cached.aId && cached.bId && cached.aDiscipline && cached.bDiscipline) {
+      const a = lookup(cached.aDiscipline, cached.aId);
+      const b = lookup(cached.bDiscipline, cached.bId);
+      if (a && b && a.discipline !== b.discipline) return { a, b };
     }
 
-    const history = readJson<string[]>(HISTORY_KEY, []);
-    const word = pick(words, new Set(history.filter((id) => id.startsWith("w")).slice(-10)));
-    const math = pick(maths, new Set(history.filter((id) => id.startsWith("m")).slice(-10)));
-    if (!word || !math) return null;
-    localStorage.setItem(HISTORY_KEY, JSON.stringify([...history, word.id, math.id].slice(-20)));
-    localStorage.setItem(TODAY_KEY, JSON.stringify({ date, wordId: word.id, mathId: math.id }));
-    return { word, math };
+    const usable = pools.filter((p) => p.entries.length > 0);
+    if (usable.length < 2) return null;
+    const history = readJson<HistoryRecord[]>(HISTORY_KEY, []);
+    const aPool = pickPool(usable, history);
+    if (!aPool) return null;
+    let bPool = pickPoolDifferentFrom(usable, aPool.key, history);
+    // If every other pool is exhausted, allow picking from the same discipline as a fallback.
+    if (!bPool) bPool = pickPoolDifferentFrom(pools.filter((p) => p.entries.length > 0), null, history);
+    if (!bPool) return null;
+    const a = pickEntry(aPool, historyFor(history, aPool.key), aPool.entries);
+    const b = pickEntry(bPool, historyFor(history, bPool.key), bPool.entries);
+    if (!a || !b) return null;
+
+    const stamped = stampHistory(history, [
+      { key: aPool.key, id: a.id },
+      { key: bPool.key, id: b.id },
+    ]);
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(stamped));
+    localStorage.setItem(TODAY_KEY, JSON.stringify({
+      date,
+      aDiscipline: aPool.key,
+      aId: a.id,
+      bDiscipline: bPool.key,
+      bId: b.id,
+    } satisfies StoredReview));
+    return { a, b };
   }
 
-  function createCard(item: WordKnowledge | MathKnowledge, type: "word" | "math"): HTMLDivElement {
-    const card = createDiv({ cls: `home-review-card ${type}` });
-    card.createDiv({ cls: "home-review-pt", text: type === "word" ? "📖 英文词汇" : "🧮 数学知识点" });
+  function lookup(disciplineKey: string, id: string): ReviewEntry | null {
+    const pool = pools.find((p) => p.key === disciplineKey);
+    if (!pool) return null;
+    const entry = pool.entries.find((e) => e.id === id);
+    return entry ?? null;
+  }
+
+  function createCard(entry: ReviewEntry): HTMLDivElement {
+    const card = createDiv({ cls: `home-review-card ${entry.discipline}` });
+    card.createDiv({ cls: "home-review-pt", text: `🏷️ ${entry.disciplineLabel}` });
     const title = card.createDiv({ cls: "home-review-title" });
-    if (type === "word" && isWord(item)) {
-      title.createEl("i", { text: item.name });
-      title.createSpan({ cls: "home-review-pos", text: ` ${item.pos}` });
-    } else if (isMath(item)) {
-      title.setText(item.title);
+    if (entry.discipline === "word") {
+      title.createEl("i", { text: entry.display });
+      if (entry.pos) title.createSpan({ cls: "home-review-pos", text: ` ${entry.pos}` });
+    } else {
+      title.setText(entry.display);
     }
-    card.createDiv({ cls: "home-review-meta", text: `${type === "word" ? "单词" : "数学"} · ID ${item.id}` });
+    card.createDiv({ cls: "home-review-meta", text: `${entry.disciplineLabel} · ID ${entry.id}` });
     const body = card.createDiv({ cls: "home-review-body" });
     const revealButton = card.createEl("button", { cls: "home-review-btn", text: "📖 定义解释" });
     let rendered = false;
@@ -190,10 +243,10 @@ export function mountReviewWidget(containerEl: HTMLElement, context: WidgetConte
       revealButton.setText(opening ? "🔼 收起" : "📖 定义解释");
       if (opening && !rendered) {
         rendered = true;
-        if (type === "math") {
-          void MarkdownRenderer.render(app, item.def ?? "", body, knowledgePath, component);
+        if (entry.discipline === "word") {
+          body.setText(entry.def);
         } else {
-          body.setText(item.def ?? "");
+          void MarkdownRenderer.render(app, entry.def ?? "", body, knowledgePath, component);
         }
       }
     });
@@ -201,17 +254,134 @@ export function mountReviewWidget(containerEl: HTMLElement, context: WidgetConte
   }
 }
 
-function pick<T extends { id: string }>(items: T[], excluded: Set<string>): T | undefined {
-  if (!items.length) return undefined;
-  const available = items.filter((item) => !excluded.has(item.id));
-  const pool = available.length ? available : items;
-  return pool[Math.floor(Math.random() * pool.length)];
+interface Pool {
+  key: string;
+  label: string;
+  discipline: Discipline;
+  entries: ReviewEntry[];
+}
+
+interface HistoryRecord {
+  key: string;
+  id: string;
+}
+
+function buildPools(data: KnowledgeData): Pool[] {
+  const pools: Pool[] = [];
+  if (data.words.length > 0) {
+    pools.push({
+      key: "word",
+      label: "英文词汇",
+      discipline: "word",
+      entries: data.words.map((w) => toEntry(w)),
+    });
+  }
+  if (data.maths.length > 0) {
+    pools.push({
+      key: "math",
+      label: "数学",
+      discipline: "math",
+      entries: data.maths.map((m) => toEntry(m)),
+    });
+  }
+  // Group subject entries by their subject label so each subject becomes its own pool.
+  const subjectGroups = new Map<string, SubjectKnowledge[]>();
+  for (const s of data.subjects) {
+    const arr = subjectGroups.get(s.subject) ?? [];
+    arr.push(s);
+    subjectGroups.set(s.subject, arr);
+  }
+  for (const [subjectLabel, items] of subjectGroups) {
+    if (!items.length) continue;
+    pools.push({
+      key: `subject:${subjectLabel}`,
+      label: subjectLabel,
+      discipline: "subject",
+      entries: items.map((s) => toEntry(s)),
+    });
+  }
+  return pools;
+}
+
+function toEntry(item: WordKnowledge): ReviewEntry;
+function toEntry(item: MathKnowledge): ReviewEntry;
+function toEntry(item: SubjectKnowledge): ReviewEntry;
+function toEntry(item: WordKnowledge | MathKnowledge | SubjectKnowledge): ReviewEntry {
+  if ("name" in item) {
+    const w = item as WordKnowledge;
+    return {
+      id: w.id,
+      discipline: "word",
+      disciplineLabel: "英文词汇",
+      display: w.name,
+      pos: w.pos,
+      def: w.def ?? "",
+    };
+  }
+  if ("subject" in item) {
+    const s = item as SubjectKnowledge;
+    return {
+      id: s.id,
+      discipline: "subject",
+      disciplineLabel: s.subject,
+      display: s.title,
+      def: s.def ?? "",
+    };
+  }
+  const m = item as MathKnowledge;
+  return {
+    id: m.id,
+    discipline: "math",
+    disciplineLabel: "数学",
+    display: m.title,
+    def: m.def ?? "",
+  };
+}
+
+function pickPool(usable: Pool[], history: HistoryRecord[]): Pool | null {
+  // Prefer disciplines that haven't been drawn recently; fall back to any usable pool.
+  const fresh = usable.filter((p) => !historyFor(history, p.key).size);
+  const pool = (fresh.length ? fresh : usable)[Math.floor(Math.random() * (fresh.length ? fresh.length : usable.length))];
+  return pool ?? null;
+}
+
+function pickPoolDifferentFrom(usable: Pool[], exclude: string | null, history: HistoryRecord[]): Pool | null {
+  const candidates = exclude ? usable.filter((p) => p.key !== exclude) : usable;
+  if (!candidates.length) return null;
+  return pickPool(candidates, history);
+}
+
+function pickEntry(pool: Pool, excluded: Set<string>, allEntries: ReviewEntry[]): ReviewEntry | undefined {
+  const available = allEntries.filter((e) => !excluded.has(e.id));
+  const source = available.length ? available : allEntries;
+  if (!source.length) return undefined;
+  return source[Math.floor(Math.random() * source.length)];
+}
+
+function historyFor(history: HistoryRecord[], key: string): Set<string> {
+  const set = new Set<string>();
+  for (const rec of history) {
+    if (rec.key === key) set.add(rec.id);
+  }
+  return set;
+}
+
+function stampHistory(history: HistoryRecord[], additions: HistoryRecord[]): HistoryRecord[] {
+  const next = history.concat(additions);
+  return next.slice(-HISTORY_MAX);
+}
+
+function formatProgress(pools: Pool[]): string {
+  if (!pools.length) return "—";
+  const parts = pools.map((p) => `${p.label} ${p.entries.length}`);
+  return `学科 ${pools.length} · ${parts.join(" · ")}`;
 }
 
 function readJson<T>(key: string, fallback: T): T {
   try {
     const value = localStorage.getItem(key);
-    return value === null ? fallback : JSON.parse(value) as T;
+    if (value === null) return fallback;
+    return JSON.parse(value) as T;
   } catch {
     return fallback;
   }
@@ -228,14 +398,21 @@ function formattedDate(): string {
   return `${todayKey()} · 星期${weekdays[date.getDay()]}`;
 }
 
-function isWord(item: WordKnowledge | MathKnowledge): item is WordKnowledge {
-  return "name" in item;
-}
-
-function isMath(item: WordKnowledge | MathKnowledge): item is MathKnowledge {
-  return "title" in item;
-}
-
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+// Re-export helper so other widgets can use the same per-discipline draw logic
+// if they want a similar surface (e.g. study session).
+export function pickTwoDifferentDisciplines(pools: Pool[], history: HistoryRecord[] = []): { a: ReviewEntry; b: ReviewEntry } | null {
+  const usable = pools.filter((p) => p.entries.length > 0);
+  if (usable.length < 2) return null;
+  const aPool = pickPool(usable, history);
+  if (!aPool) return null;
+  const bPool = pickPoolDifferentFrom(usable, aPool.key, history) ?? pickPoolDifferentFrom(pools.filter((p) => p.entries.length > 0), null, history);
+  if (!bPool) return null;
+  const a = pickEntry(aPool, historyFor(history, aPool.key), aPool.entries);
+  const b = pickEntry(bPool, historyFor(history, bPool.key), bPool.entries);
+  if (!a || !b) return null;
+  return { a, b };
 }

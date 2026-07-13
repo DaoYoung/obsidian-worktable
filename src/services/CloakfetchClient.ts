@@ -23,8 +23,22 @@ export interface CloakfetchExtractResponse {
 
 export interface CloakfetchExpandResponse {
   ok: boolean;
+  /** Canonical subject label returned by the AI (e.g. "英文词汇" / "数学" / "物理"). */
+  subject?: string;
+  /** Translation or short definition for English words. */
+  translation?: string;
+  /** Part-of-speech label for English words (n./v./adj./adv./...). */
+  pos?: string;
+  /** Structured Markdown body, ready for Obsidian preview. */
   markdown?: string;
   error?: string;
+}
+
+export interface ExpandedKnowledge {
+  subject: string;
+  translation: string;
+  pos: string;
+  markdown: string;
 }
 
 export interface CloakfetchFetchResponse {
@@ -156,11 +170,11 @@ export class CloakfetchClient {
     return res.keyPoints ?? [];
   }
 
-  async expand(name: string, context = "", timeoutMs?: number): Promise<string> {
+  async expand(name: string, context = "", timeoutMs?: number): Promise<ExpandedKnowledge> {
     return this.expandKnowledge(name, context, timeoutMs);
   }
 
-  async expandKnowledge(name: string, context = "", timeoutMs?: number): Promise<string> {
+  async expandKnowledge(name: string, context = "", timeoutMs?: number): Promise<ExpandedKnowledge> {
     const res = await this.requestJson<CloakfetchExpandResponse>("/ai/expand", {
       method: "POST",
       body: { name, context },
@@ -173,7 +187,12 @@ export class CloakfetchClient {
         endpoint: "/ai/expand",
       });
     }
-    return res.markdown ?? "";
+    return {
+      subject: res.subject ?? "",
+      translation: res.translation ?? "",
+      pos: res.pos ?? "",
+      markdown: res.markdown ?? "",
+    };
   }
 
   async diagnose(url?: string): Promise<Record<string, unknown> | string> {

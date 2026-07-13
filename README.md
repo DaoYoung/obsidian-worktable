@@ -28,7 +28,7 @@
 
 2. 添加 Worktable 插件
    - 设置 → BRAT → Add a beta plugin
-   - 输入仓库地址：`DaoYoung/obsidian-worktable`
+   - 输入仓库地址：`https://github.com/DaoYoung/obsidian-worktable.git`
 
 ### 方式二：手动安装发布版本
 

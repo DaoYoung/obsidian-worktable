@@ -9,7 +9,7 @@ Endpoints:
   GET  /fetch?url=<URL>              → JSON {ok, url, title, html, length, elapsedMs, cacheHit}
   POST /ai/questions                 → JSON {title, text, count<=3} → AI quiz (mc/cloze/tf/short)
   POST /ai/extract                   → JSON {title, text, maxPoints<=10} → key points list
-  POST /ai/expand                    → JSON {name, context?} → structured Markdown entry
+  POST /ai/expand                    → JSON {name, context?} → {subject, translation, pos, markdown}
   GET  /ai/health                    → JSON {ok, baseUrl, model}  (no token)
 
 Run:
@@ -558,8 +558,23 @@ def _extract_keypoints(title: str, text: str, max_points: int = 8) -> list:
     return [l for l in lines if 5 < len(l) < 200][:max_points]
 
 
-def _expand_knowledge_point(name: str, context: str = "") -> str:
+def _expand_knowledge_point(name: str, context: str = "") -> dict:
+    """Ask the AI to organize a knowledge point.
+
+    Returns a dict with:
+      - subject: 中文学科分类(如 "英文词汇" / "数学" / "物理" / "化学" ...)
+      - translation: 中文翻译或释义(英文单词必填,其他学科可空)
+      - pos: 词性(英文单词必填)
+      - markdown: 适合在 Obsidian 中预览的 Markdown 正文
+      - raw: 原始 AI 输出（解析失败时的兜底）
+    """
     snippet = context.strip()[:4000] if context else ""
+    is_english_word = bool(re.match(r"^[A-Za-z][A-Za-z'\-]{0,30}$", (name or "").strip()))
+    subject_hint = (
+        '"subject": "英文词汇"（1-3 句中文翻译,放 translation 字段；pos: n./v./adj./adv. 等）'
+        if is_english_word
+        else '"subject": 一个简洁中文学科标签,如 数学 / 物理 / 化学 / 生物 / 历史 / 地理 / 政治 / 语文 / 经济 / 哲学 / 心理学 / 计算机 / 其他'
+    )
     system = (
         "你是一个知识整理助手。请严格只返回 JSON 对象,不要任何其他文字、注释、Markdown 代码块。"
         "内容准确、简洁、有结构,不要编造不存在的引用。"
@@ -568,12 +583,15 @@ def _expand_knowledge_point(name: str, context: str = "") -> str:
         f"知识点名称:{name}\n\n"
         + (f"额外参考上下文:\n{snippet}\n\n" if snippet else "")
         + "请用 JSON 返回一个知识点的结构化解释,字段如下:\n"
-        '  "definition": 1-3 句中文定义\n'
-        '  "points": 3-5 条关键要点(字符串数组)\n'
-        '  "example": 可运行的 Markdown 代码示例或一段使用场景(可选,可以空字符串)\n'
-        '  "contrast": 与其他易混淆概念的区别(可选,可以空字符串)\n'
-        '  "refs": 参考资料(可选,可以空字符串)\n\n'
-        '{"definition":"...","points":["...","..."],"example":"...","contrast":"...","refs":"..."}\n'
+        + f"  {subject_hint}\n"
+        + '  "definition": 1-3 句中文定义\n'
+        + '  "translation": 中文翻译或释义（英文单词必填,其他学科可空字符串）\n'
+        + '  "pos": 词性标注,英文单词必填（n./v./adj./adv./prep./conj./pron./num./art./aux./interj.）,其他学科可空字符串\n'
+        + '  "points": 3-5 条关键要点(字符串数组)\n'
+        + '  "example": 可运行的 Markdown 代码示例或一段使用场景(可选,可以空字符串)\n'
+        + '  "contrast": 与其他易混淆概念的区别(可选,可以空字符串)\n'
+        + '  "refs": 参考资料(可选,可以空字符串)\n\n'
+        + '{"subject":"...","translation":"...","pos":"...","definition":"...","points":["...","..."],"example":"...","contrast":"...","refs":"..."}\n'
     )
     raw = _call_anthropic(system, user, max_tokens=1800, timeout=80)
 
@@ -616,13 +634,65 @@ def _expand_knowledge_point(name: str, context: str = "") -> str:
         refs = str(obj.get("refs", "")).strip()
         if refs:
             parts.append(f"## 参考资料\n\n{refs}\n")
-        if parts:
-            return "\n".join(parts)[:6000]
+        md = "\n".join(parts)[:6000] if parts else raw.strip()[:6000]
+        subject = _clean_subject(str(obj.get("subject", "")).strip(), fallback=("英文词汇" if is_english_word else "其他"))
+        translation = str(obj.get("translation", "")).strip()
+        pos = _clean_pos(str(obj.get("pos", "")).strip())
+        return {"subject": subject, "translation": translation, "pos": pos, "markdown": md, "raw": raw}
 
     fence = re.search(r"```(?:markdown|md)?\s*([\s\S]*?)```", raw)
     if fence:
-        return fence.group(1).strip()[:6000]
-    return raw.strip()[:6000]
+        md = fence.group(1).strip()[:6000]
+    else:
+        md = raw.strip()[:6000]
+    return {"subject": ("英文词汇" if is_english_word else "其他"), "translation": "", "pos": "", "markdown": md, "raw": raw}
+
+
+# Allowlist of canonical subjects the writer knows how to route.
+# Anything else falls back to "其他".
+_CANONICAL_SUBJECTS = (
+    "英文词汇", "数学", "物理", "化学", "生物", "历史",
+    "地理", "政治", "语文", "经济", "哲学", "心理学", "计算机", "其他",
+)
+
+
+def _clean_subject(raw: str, fallback: str) -> str:
+    if not raw:
+        return fallback
+    cleaned = re.sub(r"[\s　]+", "", raw)
+    if not cleaned:
+        return fallback
+    # Exact match first
+    for c in _CANONICAL_SUBJECTS:
+        if cleaned == c or re.sub(r"[\s　]+", "", c) == cleaned:
+            return c
+    # Loose match: contains any canonical label
+    for c in _CANONICAL_SUBJECTS:
+        if c in cleaned or cleaned in c:
+            return c
+    return fallback
+
+
+_POS_ALIASES = {
+    "n": "n.", "noun": "n.", "名词": "n.",
+    "v": "v.", "verb": "v.", "动词": "v.",
+    "adj": "adj.", "adjective": "adj.", "形容词": "adj.",
+    "adv": "adv.", "adverb": "adv.", "副词": "adv.",
+    "prep": "prep.", "介词": "prep.",
+    "conj": "conj.", "连词": "conj.",
+    "pron": "pron.", "代词": "pron.",
+    "num": "num.", "数词": "num.",
+    "art": "art.", "冠词": "art.",
+    "aux": "aux.", "助动词": "aux.",
+    "interj": "interj.", "感叹词": "interj.",
+}
+
+
+def _clean_pos(raw: str) -> str:
+    if not raw:
+        return ""
+    key = raw.strip().lower().rstrip(".")
+    return _POS_ALIASES.get(key, raw.strip())
 
 
 # ── HTTP handler ──────────────────────────────────────────────────────────────
@@ -850,11 +920,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send_json(400, {"ok": False, "error": "missing 'name'"})
             try:
                 t0 = time.time()
-                md = _expand_knowledge_point(name, context)
+                payload = _expand_knowledge_point(name, context)
                 elapsed = int((time.time() - t0) * 1000)
                 return self._send_json(200, {
                     "ok": True,
-                    "markdown": md,
+                    "subject": payload.get("subject", "其他"),
+                    "translation": payload.get("translation", ""),
+                    "pos": payload.get("pos", ""),
+                    "markdown": payload.get("markdown", ""),
                     "elapsedMs": elapsed,
                 })
             except Exception as e:

@@ -17,9 +17,10 @@ from threading import Thread
 from unittest.mock import MagicMock, patch
 
 
-# Patch module-level browser/browser-fetch before importing server module
+# Patch module-level browser/browser-fetch before importing server module.
+# Test is launched from the server/ directory so `server` resolves to server.py.
 with patch.dict("sys.modules", {"cloakbrowser": MagicMock()}):
-    import server.server as server
+    import server as server  # noqa: E402
 
 
 class _TestHTTPConnection(HTTPConnection):

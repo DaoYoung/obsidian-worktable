@@ -148,10 +148,17 @@ describe("CloakfetchClient - expand", () => {
     vi.unstubAllGlobals();
   });
 
-  it("returns markdown for successful expand", async () => {
-    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, markdown: "# Heading" }));
+  it("returns structured entry for successful expand", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({
+      ok: true,
+      subject: "物理",
+      translation: "",
+      pos: "",
+      markdown: "# Heading",
+    }));
     const client = new CloakfetchClient(baseSettings);
-    const md = await client.expand("SOLID", "context");
-    expect(md).toBe("# Heading");
+    const entry = await client.expand("SOLID", "context");
+    expect(entry.subject).toBe("物理");
+    expect(entry.markdown).toBe("# Heading");
   });
 });
