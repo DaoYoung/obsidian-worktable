@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.obsidian-worktable.cloakfetch</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>VENV_PYTHON</string>
+    <string>REPO_CURRENT/server/server.py</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>REPO_CURRENT</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>/tmp/cloakfetch.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/cloakfetch.err</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>VENV_DIR/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+</dict>
+</plist>
