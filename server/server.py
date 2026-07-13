@@ -100,27 +100,34 @@ def _load_config() -> dict:
         "upstreamFetchTimeout": 30,
     }
 
-    # 1. Environment
-    for key in ("host", "port", "serviceToken", "aiAuthToken",
-                "aiBaseUrl", "aiModel", "aiMaxTokens", "aiTimeout",
-                "upstreamFetchTimeout"):
-        env_key = f"WORKTABLE_{key.upper()}"
-        val = os.environ.get(env_key)
-        if val is not None:
+    def _to_env_name(k: str) -> str:
+        out = []
+        for i, ch in enumerate(k):
+            if ch.isupper() and i > 0:
+                out.append("_")
+            out.append(ch.upper())
+        return "WORKTABLE_" + "".join(out)
+
+    def _apply_env(target: dict) -> None:
+        for key, value in target.items():
+            env_key = _to_env_name(key)
+            val = os.environ.get(env_key)
+            if val is None:
+                continue
             if key in ("port", "aiMaxTokens", "aiTimeout", "upstreamFetchTimeout"):
                 try:
-                    setattr(cfg, key, int(val)) if hasattr(cfg, key) else None
-                    cfg[key] = int(val)
+                    target[key] = int(val)
                 except ValueError:
                     pass
             else:
-                cfg[key] = val
+                target[key] = val
 
-    # 2. ~/.config/obsidian-worktable/server.json
+    # 1. Load config file (lower priority)
     global _CONFIG_PATH
-    cfg_path = os.path.expanduser("~/.config/obsidian-worktable/server.json")
-    _CONFIG_PATH = cfg_path
-    if os.path.isfile(cfg_path):
+    if _CONFIG_PATH is None:
+        _CONFIG_PATH = os.path.expanduser("~/.config/obsidian-worktable/server.json")
+    cfg_path = _CONFIG_PATH
+    if cfg_path and os.path.isfile(cfg_path):
         try:
             with open(cfg_path, "r", encoding="utf-8") as f:
                 j = json.load(f)
@@ -129,6 +136,9 @@ def _load_config() -> dict:
                     cfg[key] = j[key]
         except Exception as e:
             LOG.warning("failed to read %s: %s", cfg_path, e)
+
+    # 2. Environment (highest priority — overrides config file)
+    _apply_env(cfg)
 
     return cfg
 
@@ -142,15 +152,12 @@ def _get_service_token() -> str:
     return _SERVICE_TOKEN
 
 
-def _check_auth() -> bool:
+def _check_auth(received_token: str = "") -> bool:
     """Return True if no service token is configured or if the request provides the correct one."""
     token = _get_service_token()
     if not token:
         return True
-    received = threading.current_thread().environ.get(
-        "HTTP_X_WORKTABLE_TOKEN", ""
-    )
-    return secrets.compare_digest(token, received)
+    return secrets.compare_digest(token, received_token or "")
 
 
 # ── Browser (lazy-loaded, thread-safe via Lock) ───────────────────────────────
@@ -498,7 +505,7 @@ def _generate_questions(title: str, text: str, count: int) -> list:
         f'  - "tf": 判断题,answer 必须是 "对" 或 "错"。fields: text, answer, explanation\n'
         f'  - "short": 简答题,answer 是 1-5 个关键词。fields: text, answer, explanation\n\n'
         f"严格返回以下 JSON 格式,不要任何其他文字:\n"
-        f\'{{"questions":[{{"type":"...","text":"...","answer":"...","options":["...","...","...","..."],"explanation":"..."}}]}}\'
+        f'{{"questions":[{{"type":"...","text":"...","answer":"...","options":["...","...","...","..."],"explanation":"..."}}]}}\n'
     )
     raw = _call_anthropic(system, user, max_tokens=2048, timeout=60)
     questions = _parse_questions_json(raw)
@@ -566,7 +573,7 @@ def _expand_knowledge_point(name: str, context: str = "") -> str:
         '  "example": 可运行的 Markdown 代码示例或一段使用场景(可选,可以空字符串)\n'
         '  "contrast": 与其他易混淆概念的区别(可选,可以空字符串)\n'
         '  "refs": 参考资料(可选,可以空字符串)\n\n'
-        \'{"definition":"...","points":["...","..."],"example":"...","contrast":"...","refs":"..."}\'
+        '{"definition":"...","points":["...","..."],"example":"...","contrast":"...","refs":"..."}\n'
     )
     raw = _call_anthropic(system, user, max_tokens=1800, timeout=80)
 
@@ -665,7 +672,8 @@ class Handler(BaseHTTPRequestHandler):
         return json.loads(raw.decode("utf-8"))
 
     def _require_auth(self) -> bool:
-        if _check_auth():
+        received = self.headers.get("X-Worktable-Token", "")
+        if _check_auth(received):
             return True
         self._send_json(401, {"ok": False, "error": "unauthorized"})
         return False

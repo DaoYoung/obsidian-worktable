@@ -1,2 +1,8 @@
-import type { WidgetMount } from "./types";
-export const mount: WidgetMount = async () => {};
+import { mountLearningWidget } from "./LearningWidget";
+import type { WidgetContext, WidgetMount } from "./types";
+
+const mount: WidgetMount = (containerEl, context) => {
+  mountLearningWidget(containerEl, context);
+};
+
+export { mount };

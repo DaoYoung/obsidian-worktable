@@ -601,7 +601,11 @@ function button(parent: HTMLElement, text: string, className = ""): HTMLButtonEl
 
 async function fetchArticle(client: CloakfetchClient, url: string, allowPublicFallbacks: boolean): Promise<string> {
   try {
-    return await client.fetchUrl(url);
+    const res = await client.fetchUrl(url);
+    if (res && typeof res === "object" && "html" in res && typeof (res as { html?: unknown }).html === "string") {
+      return (res as { html: string }).html;
+    }
+    throw new Error("Fetch returned no HTML");
   } catch (localError) {
     if (!allowPublicFallbacks) throw localError;
   }

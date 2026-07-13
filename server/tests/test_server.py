@@ -19,7 +19,7 @@ from unittest.mock import MagicMock, patch
 
 # Patch module-level browser/browser-fetch before importing server module
 with patch.dict("sys.modules", {"cloakbrowser": MagicMock()}):
-    import server
+    import server.server as server
 
 
 class _TestHTTPConnection(HTTPConnection):
@@ -68,11 +68,30 @@ class _TestClient:
         conn = http.client.HTTPConnection("127.0.0.1", self._srv.server_address[1], timeout=5)
         conn.connect()
         try:
-            conn.request(method, path, body=body, headers=h)
-            resp = conn.getresponse()
-            return _TestResponse(resp)
+            try:
+                conn.request(method, path, body=body, headers=h)
+                resp = conn.getresponse()
+                return _TestResponse(resp)
+            except (BrokenPipeError, ConnectionResetError, http.client.RemoteDisconnected):
+                # Server closed connection before responding (e.g., rejected oversized body).
+                return _ClosedResponse()
         finally:
-            conn.close()
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+class _ClosedResponse:
+    """Synthetic response when the server closes the connection early."""
+
+    def __init__(self):
+        self.status = 0
+        self.headers = {}
+        self.body = ""
+
+    def json(self):
+        return {}
 
 
 class _TestResponse:
@@ -106,7 +125,7 @@ class TestConfigPrecedence(unittest.TestCase):
     def _write_config(self, path, data):
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w") as f:
-            json.dump(data, f, f)
+            json.dump(data, f)
 
     @patch.dict(os.environ, {"WORKTABLE_PORT": "9999"})
     def test_env_overrides_config_file(self):
@@ -277,33 +296,54 @@ class TestPayloadLimits(unittest.TestCase):
             body=oversized,
             headers={"Content-Length": str(len(oversized))},
         )
-        # Handler should reject before auth check
-        self.assertIn(resp.status, (400, 401))
+        # Handler should reject before auth check (or close connection early)
+        self.assertIn(resp.status, (0, 400, 401))
         srv.shutdown()
 
     def test_ai_questions_respects_count_clamp(self):
-        """count > 3 is clamped to 3."""
+        """count > 3 is clamped to 3 and never reaches AI when overridden."""
         srv, port = self._make_server()
         cli = _TestClient(server.Handler, srv)
-        resp = cli.request(
-            "POST",
-            f"http://127.0.0.1:{port}/ai/questions",
-            body=json.dumps({"title": "t", "text": "hello", "count": 10}),
-        )
-        # Without AI config will 502/500 but not 400 — count is clamped in handler
-        # We just verify the endpoint accepts it (auth error if token required)
+
+        captured = {}
+
+        def fake_generate(title, text, count):
+            captured["title"] = title
+            captured["text"] = text
+            captured["count"] = count
+            return [{"type": "mc", "text": "q", "answer": "a", "options": ["a", "b", "c", "d"], "explanation": ""}]
+
+        with patch.object(server, "_generate_questions", side_effect=fake_generate):
+            resp = cli.request(
+                "POST",
+                f"http://127.0.0.1:{port}/ai/questions",
+                body=json.dumps({"title": "t", "text": "hello", "count": 10}),
+            )
+        # count must be clamped to 3 before reaching the AI
+        self.assertEqual(captured.get("count"), 3)
+        self.assertEqual(resp.status, 200)
         srv.shutdown()
 
     def test_ai_extract_maxpoints_clamped(self):
         """maxPoints > 10 is clamped to 10."""
         srv, port = self._make_server()
         cli = _TestClient(server.Handler, srv)
-        resp = cli.request(
-            "POST",
-            f"http://127.0.0.1:{port}/ai/extract",
-            body=json.dumps({"title": "t", "text": "hello", "maxPoints": 999}),
-        )
-        # Should not 400 on validation — just clamped
+
+        captured = {}
+
+        def fake_extract(title, text, max_points):
+            captured["max_points"] = max_points
+            return ["point"]
+
+        with patch.object(server, "_extract_keypoints", side_effect=fake_extract):
+            resp = cli.request(
+                "POST",
+                f"http://127.0.0.1:{port}/ai/extract",
+                body=json.dumps({"title": "t", "text": "hello", "maxPoints": 999}),
+            )
+        # maxPoints must be clamped to 10
+        self.assertEqual(captured.get("max_points"), 10)
+        self.assertEqual(resp.status, 200)
         srv.shutdown()
 
 

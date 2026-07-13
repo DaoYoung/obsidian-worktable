@@ -106,7 +106,7 @@ export function createPomDb(): PomDb {
       req.onsuccess = () => {
         const cfg: PomConfig = { sound: true, notify: true, auto: true };
         req.result.forEach((r: { key: string; value: boolean }) => {
-          if (r.key in cfg) (cfg as Record<string, boolean>)[r.key] = r.value;
+          if (r.key in cfg) (cfg as unknown as Record<string, boolean>)[r.key] = r.value;
         });
         resolve(cfg);
       };

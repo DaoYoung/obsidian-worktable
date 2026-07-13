@@ -2,7 +2,7 @@ import { Component, ItemView } from "obsidian";
 import type { App, WorkspaceLeaf } from "obsidian";
 import type ObsidianWorktablePlugin from "../main";
 import type { WorktableSettings } from "../settings";
-import type { WidgetContext, WidgetDescriptor, WidgetId } from "../widgets/types";
+import type { WidgetContext, WidgetDescriptor, WidgetId, WidgetMount } from "../widgets/types";
 
 export const WORKTABLE_VIEW_TYPE = "obsidian-worktable-view";
 
@@ -16,7 +16,7 @@ interface SectionContainer {
 function getWidgetDescriptors(): WidgetDescriptor[] {
   // Lazy import to keep this file free of stub requirements: the view still
   // runs even if a particular widget is missing (it surfaces the error).
-  const modules: Array<{ id: WidgetId; title: string; loader: () => Promise<{ mount: WidgetDescriptor["mount"] }> }> = [
+  const modules: Array<{ id: WidgetId; title: string; loader: () => Promise<WidgetMount> }> = [
     { id: "pomodoro", title: "🍅 番茄钟", loader: () => import("../widgets/pomodoro").then((m) => m.mount) },
     { id: "todo", title: "✅ 任务清单", loader: () => import("../widgets/todo").then((m) => m.mount) },
     { id: "learning", title: "🌱 学习", loader: () => import("../widgets/learning").then((m) => m.mount) },
@@ -141,7 +141,8 @@ export class WorktableView extends ItemView {
     context: WidgetContext
   ): Promise<void> {
     try {
-      await descriptor.mount(section.widgetEl, context);
+      const mount = await descriptor.mount();
+      mount(section.widgetEl, context);
       section.errorEl.hide();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

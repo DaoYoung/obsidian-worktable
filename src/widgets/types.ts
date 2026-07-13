@@ -21,5 +21,5 @@ export type WidgetMount = (containerEl: HTMLElement, context: WidgetContext) => 
 export interface WidgetDescriptor {
   id: WidgetId;
   title: string;
-  mount: WidgetMount;
+  mount: () => Promise<WidgetMount>;
 }

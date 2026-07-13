@@ -1,4 +1,5 @@
 import type { WorktableSettings } from "../settings";
+import { DEFAULT_SETTINGS } from "../settings";
 
 export interface CloakfetchQuestion {
   type: "mc" | "cloze" | "tf" | "short";
@@ -60,14 +61,29 @@ export interface CloakfetchClientOptions {
 }
 
 const DEFAULT_TIMEOUT_MS = 15_000;
-const SERVER_CONFIG_PATHS = [
-  "/Users/yidao/.config/obsidian-worktable/server.json",
-  "/etc/obsidian-worktable/server.json",
-];
 
 interface CachedToken {
   value: string;
   loadedAt: number;
+}
+
+let defaultSettings: WorktableSettings | null = null;
+
+export function setCloakfetchDefaultSettings(settings: WorktableSettings | null): void {
+  defaultSettings = settings;
+}
+
+function makeFallbackSettings(): WorktableSettings {
+  return { ...DEFAULT_SETTINGS };
+}
+
+function resolveServerConfigPaths(): string[] {
+  // Build paths from $HOME so we never hardcode machine-specific prefixes.
+  const home =
+    (typeof process !== "undefined" && process.env && process.env.HOME) || "";
+  const systemEtc = "/etc/obsidian-worktable/server.json";
+  if (!home) return [systemEtc];
+  return [`${home}/.config/obsidian-worktable/server.json`, systemEtc];
 }
 
 export class CloakfetchClient {
@@ -75,8 +91,8 @@ export class CloakfetchClient {
   private readonly options: CloakfetchClientOptions;
   private cachedToken: CachedToken | null = null;
 
-  constructor(settings: WorktableSettings, options: CloakfetchClientOptions = {}) {
-    this.settings = settings;
+  constructor(settings?: WorktableSettings | null, options: CloakfetchClientOptions = {}) {
+    this.settings = settings ?? defaultSettings ?? makeFallbackSettings();
     this.options = options;
   }
 
@@ -89,6 +105,10 @@ export class CloakfetchClient {
   }
 
   async fetch(url: string, timeoutMs?: number): Promise<CloakfetchFetchResponse> {
+    return this.fetchUrl(url, timeoutMs);
+  }
+
+  async fetchUrl(url: string, timeoutMs?: number): Promise<CloakfetchFetchResponse> {
     const search = new URLSearchParams({ url }).toString();
     return this.requestJson<CloakfetchFetchResponse>(`/fetch?${search}`, {
       method: "GET",
@@ -97,6 +117,10 @@ export class CloakfetchClient {
   }
 
   async questions(title: string, text: string, count = 3, timeoutMs?: number): Promise<CloakfetchQuestion[]> {
+    return this.generateQuestions(title, text, count, timeoutMs);
+  }
+
+  async generateQuestions(title: string, text: string, count = 3, timeoutMs?: number): Promise<CloakfetchQuestion[]> {
     const res = await this.requestJson<CloakfetchQuestionsResponse>("/ai/questions", {
       method: "POST",
       body: { title, text, count },
@@ -113,6 +137,10 @@ export class CloakfetchClient {
   }
 
   async extract(title: string, text: string, maxPoints = 8, timeoutMs?: number): Promise<string[]> {
+    return this.extractKeyPoints(title, text, maxPoints, timeoutMs);
+  }
+
+  async extractKeyPoints(title: string, text: string, maxPoints = 8, timeoutMs?: number): Promise<string[]> {
     const res = await this.requestJson<CloakfetchExtractResponse>("/ai/extract", {
       method: "POST",
       body: { title, text, maxPoints },
@@ -129,6 +157,10 @@ export class CloakfetchClient {
   }
 
   async expand(name: string, context = "", timeoutMs?: number): Promise<string> {
+    return this.expandKnowledge(name, context, timeoutMs);
+  }
+
+  async expandKnowledge(name: string, context = "", timeoutMs?: number): Promise<string> {
     const res = await this.requestJson<CloakfetchExpandResponse>("/ai/expand", {
       method: "POST",
       body: { name, context },
@@ -142,6 +174,23 @@ export class CloakfetchClient {
       });
     }
     return res.markdown ?? "";
+  }
+
+  async diagnose(url?: string): Promise<Record<string, unknown> | string> {
+    try {
+      const health = await this.health();
+      if (url) {
+        try {
+          await this.fetchUrl(url, 5_000);
+          return { health: health as unknown as Record<string, unknown>, sampleFetch: "ok" };
+        } catch (err) {
+          return { health: health as unknown as Record<string, unknown>, sampleFetch: `error: ${(err as Error).message}` };
+        }
+      }
+      return health as unknown as Record<string, unknown>;
+    } catch (err) {
+      return `diagnose failed: ${(err as Error).message}`;
+    }
   }
 
   private async resolveToken(): Promise<string> {
@@ -223,7 +272,7 @@ async function readTokenFromDisk(): Promise<string> {
     // Obsidian's plugin runtime is desktop-only and always has node modules.
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const fs = require("node:fs") as typeof import("node:fs");
-    for (const p of SERVER_CONFIG_PATHS) {
+    for (const p of resolveServerConfigPaths()) {
       try {
         if (!fs.existsSync(p)) continue;
         const raw = fs.readFileSync(p, "utf-8");

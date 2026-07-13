@@ -11,7 +11,7 @@ export function mountTodoWidget(containerEl: HTMLElement, context: WidgetContext
   const { component } = context;
 
   const db = homeDb ?? null;
-  let todos: Array<{
+  type Todo = {
     id: number;
     text: string;
     status: "todo" | "done";
@@ -19,7 +19,8 @@ export function mountTodoWidget(containerEl: HTMLElement, context: WidgetContext
     createdAt: number;
     updatedAt: number;
     completedAt: number | null;
-  }> = [];
+  };
+  let todos: Todo[] = [];
   let showDone = true;
 
   const wrap = document.createElement("div");
@@ -105,7 +106,7 @@ export function mountTodoWidget(containerEl: HTMLElement, context: WidgetContext
     `;
 
     // Toggle done
-    const tgl = root2.querySelector("#todo-toggle-done");
+    const tgl = root2.querySelector<HTMLElement>("#todo-toggle-done");
     if (tgl) {
       component.registerDomEvent(tgl, "click", () => {
         showDone = !showDone;
@@ -114,7 +115,7 @@ export function mountTodoWidget(containerEl: HTMLElement, context: WidgetContext
     }
 
     // Clear done
-    const clr = root2.querySelector("#todo-clear-done");
+    const clr = root2.querySelector<HTMLElement>("#todo-clear-done");
     if (clr) {
       component.registerDomEvent(clr, "click", async () => {
         if (!window.confirm("清空所有已完成任务？")) return;
@@ -124,7 +125,7 @@ export function mountTodoWidget(containerEl: HTMLElement, context: WidgetContext
     }
 
     // Toggle complete
-    root2.querySelectorAll('[data-toggle="1"]').forEach((b) => {
+    root2.querySelectorAll<HTMLElement>('[data-toggle="1"]').forEach((b) => {
       component.registerDomEvent(b, "click", async () => {
         const id = Number((b as HTMLElement).dataset.id);
         const t = todos.find((x) => x.id === id);
@@ -141,7 +142,7 @@ export function mountTodoWidget(containerEl: HTMLElement, context: WidgetContext
     });
 
     // Delete
-    root2.querySelectorAll(".del").forEach((b) => {
+    root2.querySelectorAll<HTMLElement>(".del").forEach((b) => {
       component.registerDomEvent(b, "click", async () => {
         if (!window.confirm("删除该任务？")) return;
         if (db) await db.deleteTodo(Number((b as HTMLElement).dataset.id));
@@ -150,7 +151,7 @@ export function mountTodoWidget(containerEl: HTMLElement, context: WidgetContext
     });
 
     // Edit
-    root2.querySelectorAll(".edit").forEach((b) => {
+    root2.querySelectorAll<HTMLElement>(".edit").forEach((b) => {
       component.registerDomEvent(b, "click", (e) => {
         void startEdit(Number((b as HTMLElement).dataset.id), e as MouseEvent);
       });
@@ -190,7 +191,16 @@ export function mountTodoWidget(containerEl: HTMLElement, context: WidgetContext
 
   async function reload(): Promise<void> {
     if (db) {
-      todos = await db.getAllTodos();
+      const recs = await db.getAllTodos();
+      todos = recs.map((r) => ({
+        id: r.id ?? 0,
+        text: r.text,
+        status: r.status,
+        priority: r.priority,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+        completedAt: r.completedAt,
+      }));
     }
     renderList();
   }

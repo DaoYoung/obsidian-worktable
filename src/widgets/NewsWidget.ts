@@ -109,7 +109,7 @@ export function mountNewsWidget(
       .join("");
 
     // Click title → open + mark read
-    listEl.querySelectorAll(".home-news-title").forEach((el) => {
+    listEl.querySelectorAll<HTMLElement>(".home-news-title").forEach((el) => {
       component.registerDomEvent(el, "click", () => {
         const itemEl = (el as HTMLElement).closest(".home-news-item") as HTMLElement | null;
         const path = itemEl?.dataset.path;
@@ -118,8 +118,8 @@ export function mountNewsWidget(
         // Open via workspace
         try {
           if (app && name) {
-            // Use openLinkText with the full path to open the file
-            app.workspace.getLeaf(false).openLinkText(name, "/", false);
+            // Use openLinkText on the workspace (not the leaf) to open the file
+            void app.workspace.openLinkText(name, "/", false);
           }
         } catch (_) {}
 
@@ -136,7 +136,7 @@ export function mountNewsWidget(
     });
 
     // Mark read button
-    listEl.querySelectorAll(".home-news-mark").forEach((btn) => {
+    listEl.querySelectorAll<HTMLElement>(".home-news-mark").forEach((btn) => {
       component.registerDomEvent(btn, "click", async () => {
         (btn as HTMLButtonElement).disabled = true;
         const path = (btn as HTMLElement).dataset.path;

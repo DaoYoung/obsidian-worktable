@@ -151,14 +151,14 @@ export function mountFlowersWidget(containerEl: HTMLElement, context: WidgetCont
     archivesList.innerHTML = itemsHtml + toggleHtml;
 
     // Archive item click → expand detail
-    archivesList.querySelectorAll(".archive-item").forEach((el) => {
+    archivesList.querySelectorAll<HTMLElement>(".archive-item").forEach((el) => {
       component.registerDomEvent(el, "click", () => {
         el.classList.toggle("open");
       });
     });
 
     // Expand button
-    const expandBtn = archivesList.querySelector("#archives-expand-btn");
+    const expandBtn = archivesList.querySelector<HTMLElement>("#archives-expand-btn");
     if (expandBtn) {
       component.registerDomEvent(expandBtn, "click", (e) => {
         e.stopPropagation();
@@ -168,7 +168,7 @@ export function mountFlowersWidget(containerEl: HTMLElement, context: WidgetCont
     }
 
     // Collapse button
-    const collapseBtn = archivesList.querySelector("#archives-collapse-btn");
+    const collapseBtn = archivesList.querySelector<HTMLElement>("#archives-collapse-btn");
     if (collapseBtn) {
       component.registerDomEvent(collapseBtn, "click", (e) => {
         e.stopPropagation();
@@ -202,11 +202,13 @@ export function mountFlowersWidget(containerEl: HTMLElement, context: WidgetCont
   });
 
   // Listen for cross-widget events via dashboardEl
-  component.registerDomEvent(dashboardEl, "worktable:flowers-changed", () => {
-    void refresh();
-  });
-  component.registerDomEvent(dashboardEl, "worktable:learning-archived", () => {
-    void refresh();
+  const onFlowersChanged = (): void => { void refresh(); };
+  const onLearningArchived = (): void => { void refresh(); };
+  dashboardEl.addEventListener("worktable:flowers-changed", onFlowersChanged as EventListener);
+  dashboardEl.addEventListener("worktable:learning-archived", onLearningArchived as EventListener);
+  component.register(() => {
+    dashboardEl.removeEventListener("worktable:flowers-changed", onFlowersChanged as EventListener);
+    dashboardEl.removeEventListener("worktable:learning-archived", onLearningArchived as EventListener);
   });
 
   // ── Init ──────────────────────────────────────────────────────────────────

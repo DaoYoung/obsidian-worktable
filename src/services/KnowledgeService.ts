@@ -30,7 +30,7 @@ export const POS_SECTION: Record<string, string> = {
 
 const POS_PATTERN = /\b([A-Za-z][A-Za-z'\-]{0,30})\s*[\(（]\s*(n\.|v\.|adj\.|adv\.|prep\.|conj\.|pron\.|num\.|art\.|aux\.|interj\.)\s*[\)）]/;
 const DEFINITION_PATTERN = /(?:释义|##\s*是什么|关键要点)[:：]?\s*\n+\s*([^\n#*`>|-]+)/;
-const FIRST_LINE_PATTERN = /^[^\n#*`>|-]+/m;
+const FIRST_LINE_PATTERN = /^([^\n#*`>|-]+)/m;
 const MATH_LATEX_PATTERN = /\$\$?[\s\S]+?\$\$?|\\(dfrac|sqrt|frac|pm|neq|geq|leq|Delta|varphi|sum|int|to|infty)/;
 const MATH_UNICODE_PATTERN = /[∂∑∫∏√±×÷≠≈≤≥∞→←⇒]/;
 const H2_SECTION_PATTERN = /^##\s.+/m;
@@ -60,13 +60,29 @@ export function parseWordFromMd(name: string, md: string): ParsedWord | null {
   if (match) {
     const word = (match[1] || "").trim();
     const pos = (match[2] || "").trim();
-    const defMatch = text.match(DEFINITION_PATTERN) || text.match(FIRST_LINE_PATTERN);
-    const def = defMatch && defMatch[1] ? defMatch[1].trim() : "";
+    let def = "";
+    const labeled = text.match(DEFINITION_PATTERN);
+    if (labeled && labeled[1]) {
+      def = labeled[1].trim();
+    } else {
+      const tail = text
+        .slice((match.index ?? 0) + match[0].length)
+        .replace(/^[\s)）:：]+/, "")
+        .split(/\r?\n/)[0]
+        ?.trim();
+      if (tail) def = tail;
+    }
     return { name: word, pos, def };
   }
   if (/^[A-Za-z][A-Za-z'\-]{0,30}$/.test(name)) {
-    const defMatch = text.match(DEFINITION_PATTERN) || text.match(FIRST_LINE_PATTERN);
-    const def = defMatch && defMatch[1] ? defMatch[1].trim() : "";
+    let def = "";
+    const labeled = text.match(DEFINITION_PATTERN);
+    if (labeled && labeled[1]) {
+      def = labeled[1].trim();
+    } else {
+      const fl = text.match(FIRST_LINE_PATTERN);
+      if (fl && fl[1]) def = fl[1].trim();
+    }
     return { name: name.trim(), pos: "n.", def };
   }
   return null;
@@ -188,16 +204,19 @@ export function reorganizeKpFile(
   if (category === "word") {
     const parsed = parseWordFromMd(name, content);
     if (!parsed) {
-      return { text: text || "", fallback: "misc" };
+      const miscResult = reorganizeKpFile(text, "misc", name, content);
+      return { text: miscResult.text, fallback: "misc" };
     }
     const wordSecIdx = findSection(finalSections, H2_WORDS_PATTERN);
     if (wordSecIdx < 0) {
-      return { text: text || "", fallback: "misc" };
+      const miscResult = reorganizeKpFile(text, "misc", name, content);
+      return { text: miscResult.text, fallback: "misc" };
     }
     const targetTitle = POS_SECTION[parsed.pos] ?? POS_SECTION.misc ?? "### 1.4 其他";
     const wordSection = finalSections[wordSecIdx];
     if (!wordSection) {
-      return { text: text || "", fallback: "misc" };
+      const miscResult = reorganizeKpFile(text, "misc", name, content);
+      return { text: miscResult.text, fallback: "misc" };
     }
     const h3Match = H3_SPLIT_PATTERN.exec(wordSection.text);
     const h3Index = h3Match ? h3Match.index : -1;
@@ -228,11 +247,13 @@ export function reorganizeKpFile(
   } else if (category === "math") {
     const mathSecIdx = findSection(finalSections, H2_MATH_PATTERN);
     if (mathSecIdx < 0) {
-      return { text: text || "", fallback: "misc" };
+      const miscResult = reorganizeKpFile(text, "misc", name, content);
+      return { text: miscResult.text, fallback: "misc" };
     }
     const mathSection = finalSections[mathSecIdx];
     if (!mathSection) {
-      return { text: text || "", fallback: "misc" };
+      const miscResult = reorganizeKpFile(text, "misc", name, content);
+      return { text: miscResult.text, fallback: "misc" };
     }
     const numRe = /^###\s*(\d+)\.(\d+)\s+/gm;
     let maxN = 0;
@@ -374,4 +395,81 @@ export function createKnowledgeVaultService(app: App): KnowledgeVaultService {
       }
     },
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Class-based facade (used by the learning / review widgets).
+// Keeps the pure helpers above and the vault I/O behind a stable shape.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface WordKnowledge {
+  id: string;
+  name: string;
+  pos: string;
+  def: string;
+}
+
+export interface MathKnowledge {
+  id: string;
+  title: string;
+  def: string;
+}
+
+export interface KnowledgeData {
+  words: WordKnowledge[];
+  maths: MathKnowledge[];
+}
+
+export interface AppendResult {
+  category: KnowledgeCategory;
+  where: string;
+  totalLen: number;
+}
+
+export class KnowledgeService {
+  private readonly app: App;
+  private readonly path: string;
+  private readonly vault: KnowledgeVaultService;
+  private cached: { ts: number; text: string } | null = null;
+  private static CACHE_TTL = 60_000;
+
+  constructor(app: App, knowledgePath: string) {
+    this.app = app;
+    this.path = (knowledgePath || "plans/知识点.md").trim() || "plans/知识点.md";
+    this.vault = createKnowledgeVaultService(app);
+  }
+
+  get filePath(): string {
+    return this.path;
+  }
+
+  inferCategory(name: string, markdown: string): KnowledgeCategory {
+    return inferCategory(name, markdown);
+  }
+
+  async readFile(): Promise<string> {
+    if (this.cached && Date.now() - this.cached.ts < KnowledgeService.CACHE_TTL) {
+      return this.cached.text;
+    }
+    const text = (await this.vault.read(this.path)) ?? "";
+    this.cached = { ts: Date.now(), text };
+    return text;
+  }
+
+  async load(force = false): Promise<KnowledgeData> {
+    if (force) this.cached = null;
+    const text = await this.readFile();
+    return parseKnowledgeMd(text);
+  }
+
+  async append(category: KnowledgeCategory, name: string, content: string): Promise<AppendResult> {
+    const existing = await this.readFile();
+    const { text, fallback } = reorganizeKpFile(existing, category, name, content);
+    const finalCategory: KnowledgeCategory = (fallback ?? category) as KnowledgeCategory;
+    await this.vault.ensureFolder(this.path);
+    await this.app.vault.adapter.write(this.path, text);
+    this.cached = { ts: Date.now(), text };
+    const where = sectionTargetName(text, finalCategory, name);
+    return { category: finalCategory, where, totalLen: text.length };
+  }
 }

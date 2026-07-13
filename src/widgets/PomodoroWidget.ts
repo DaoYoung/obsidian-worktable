@@ -513,7 +513,8 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
     state.pausedRemain = null;
     state._currentStart = null;
     state.mode = mode;
-    state.durationMin = duration ?? DURATIONS[mode] ?? 25;
+    const fallback = mode === "custom" ? 25 : DURATIONS[mode as "work" | "short" | "long"];
+    state.durationMin = duration ?? fallback;
     btnStart.textContent = "▶ 开始";
     saveState(state);
     render();

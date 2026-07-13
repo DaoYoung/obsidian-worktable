@@ -1,5 +1,6 @@
 import { Plugin, WorkspaceLeaf } from "obsidian";
 import { DEFAULT_SETTINGS, WorktableSettings, WorktableSettingTab } from "./settings";
+import { setCloakfetchDefaultSettings } from "./services/CloakfetchClient";
 import { WORKTABLE_VIEW_TYPE, WorktableView } from "./view/WorktableView";
 
 export default class ObsidianWorktablePlugin extends Plugin {
@@ -7,6 +8,7 @@ export default class ObsidianWorktablePlugin extends Plugin {
 
   async onload(): Promise<void> {
     await this.loadSettings();
+    setCloakfetchDefaultSettings(this.settings);
     this.addSettingTab(new WorktableSettingTab(this.app, this));
 
     this.registerView(
@@ -49,14 +51,17 @@ export default class ObsidianWorktablePlugin extends Plugin {
 
   onunload(): void {
     this.app.workspace.detachLeavesOfType(WORKTABLE_VIEW_TYPE);
+    setCloakfetchDefaultSettings(null);
   }
 
   async loadSettings(): Promise<void> {
     const data = (await this.loadData()) as Partial<WorktableSettings> | null;
     this.settings = { ...DEFAULT_SETTINGS, ...(data ?? {}) };
+    setCloakfetchDefaultSettings(this.settings);
   }
 
   async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
+    setCloakfetchDefaultSettings(this.settings);
   }
 }
