@@ -2,6 +2,7 @@ import { MarkdownRenderer } from "obsidian";
 import { CloakfetchClient, type ExpandedKnowledge } from "../services/CloakfetchClient";
 import { KnowledgeService } from "../services/KnowledgeService";
 import { createHomeDb, type LearningRecord } from "../storage/homeDb";
+import type { WorktableSettings } from "../settings";
 import type { WidgetContext } from "../types";
 
 type QuestionType = "mc" | "cloze" | "tf" | "short";
@@ -27,7 +28,7 @@ interface LearningState {
 }
 
 interface LearningSettings {
-  knowledgePath?: unknown;
+  knowledgeFile?: unknown;
   enablePublicFetchFallbacks?: unknown;
 }
 
@@ -36,11 +37,11 @@ const FLOWER_KEY = "home-learning-flowers";
 
 export function mountLearningWidget(containerEl: HTMLElement, context: WidgetContext): void {
   const { app, component, dashboardEl } = context;
-  const settings = context.settings as LearningSettings;
-  const knowledgePath = typeof settings.knowledgePath === "string" && settings.knowledgePath.trim()
-    ? settings.knowledgePath.trim()
+  const settings = context.settings as LearningSettings & Partial<WorktableSettings>;
+  const knowledgePath = typeof settings.knowledgeFile === "string" && settings.knowledgeFile.trim()
+    ? settings.knowledgeFile.trim()
     : "plans/知识点.md";
-  const client = new CloakfetchClient();
+  const client = new CloakfetchClient(context.settings as WorktableSettings);
   const knowledge = new KnowledgeService(app, knowledgePath);
   const db = createHomeDb();
   let state = emptyState();

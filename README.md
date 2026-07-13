@@ -80,6 +80,31 @@ npm run verify
 
 插件开箱即用，无需额外配置即可正常运行。
 
+### 插件内设置（Obsidian Settings → Obsidian Worktable）
+
+`Settings → Community plugins → Obsidian Worktable → Options` 提供以下可视化配置：
+
+| 设置项 | 默认值 | 说明 |
+|--------|--------|------|
+| Knowledge file | `plans/知识点.md` | 学习模块写入、复习模块读取的知识库路径（vault 相对路径） |
+| News folder | `news` | 新闻模块读取的目录；目录外但带 `#news` 标签的文件也会被收录 |
+| Service base URL | `http://127.0.0.1:8765` | 本地 Cloakfetch 服务地址 |
+| Service token（可选） | `""` | 访问本地服务时携带的 `X-Worktable-Token`；留空则尝试从 `~/.config/obsidian-worktable/server.json` 读取 |
+| Open on startup | ✅ | 启动 Obsidian 时自动打开 Worktable 视图 |
+| Enable fallback proxies | ✅ | 学习模块抓取失败时回退到公共 CORS 代理 |
+| Provider | `anthropic` | AI 提供方，目前仅支持 Anthropic Messages API |
+| API key | `""` | Anthropic API key（`sk-ant-...`），直接调用 Anthropic 时使用 |
+| Base URL | `https://api.anthropic.com` | Anthropic 兼容端点（官方 / 代理 / MiniMax 等） |
+| Model | `claude-sonnet-4-5` | 模型 ID |
+
+#### Direct AI 配置（可选）
+
+当 **API key + Base URL + Model** 三项都填写时，插件会**直接调用 Anthropic Messages API**，完全绕过本地 Cloakfetch 服务进行 AI 调用（出题、提取重点、整理知识点）。此时 `Service base URL` 仅用于 `/fetch` 抓取网页。
+
+当任一项留空时，AI 调用会回退到本地服务的 `/ai/*` 端点（依赖 Cloakfetch 服务配置 `aiAuthToken` / `aiBaseUrl` / `aiModel`）。
+
+API key 与其它设置一样，存储在 Obsidian 的 `.obsidian/plugins/obsidian-worktable/data.json`，由 Obsidian 管理。如需更高级的密钥管理（如系统 keychain），可在后续版本接入。
+
 ### 服务配置文件
 
 本地 Cloakfetch 服务通过 `~/.config/obsidian-worktable/server.json` 读取配置（参考 [server/config.example.json](./server/config.example.json)）。插件设置中填写的 "Service token" 等同于下表中的 `serviceToken` 字段，优先级 **高于** 配置文件。

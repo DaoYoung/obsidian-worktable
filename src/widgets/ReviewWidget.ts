@@ -9,7 +9,7 @@ import {
 import type { WidgetContext } from "../types";
 
 interface ReviewSettings {
-  knowledgePath?: unknown;
+  knowledgeFile?: unknown;
 }
 
 type Discipline = "word" | "math" | "subject";
@@ -60,8 +60,8 @@ const HISTORY_MAX = 60;
 export function mountReviewWidget(containerEl: HTMLElement, context: WidgetContext): void {
   const { app, component } = context;
   const settings = context.settings as ReviewSettings;
-  const knowledgePath = typeof settings.knowledgePath === "string" && settings.knowledgePath.trim()
-    ? settings.knowledgePath.trim()
+  const knowledgePath = typeof settings.knowledgeFile === "string" && settings.knowledgeFile.trim()
+    ? settings.knowledgeFile.trim()
     : "plans/知识点.md";
   const knowledge = new KnowledgeService(app, knowledgePath);
   let data: KnowledgeData = { words: [], maths: [], subjects: [] };

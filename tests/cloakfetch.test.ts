@@ -9,6 +9,10 @@ const baseSettings: WorktableSettings = {
   openOnStartup: true,
   enableFallbackProxies: true,
   serviceToken: "",
+  aiProvider: "anthropic",
+  aiApiKey: "",
+  aiBaseUrl: "https://api.anthropic.com",
+  aiModel: "claude-sonnet-4-5",
 };
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -160,5 +164,127 @@ describe("CloakfetchClient - expand", () => {
     const entry = await client.expand("SOLID", "context");
     expect(entry.subject).toBe("物理");
     expect(entry.markdown).toBe("# Heading");
+  });
+});
+
+describe("CloakfetchClient - direct AI routing", () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("routes expand to the direct AI client when AI settings are filled", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              subject: "英文词汇",
+              translation: "短暂的；瞬息的",
+              pos: "adj.",
+              definition: "持续时间很短",
+              points: [],
+            }),
+          },
+        ],
+      }),
+    );
+    const client = new CloakfetchClient({
+      ...baseSettings,
+      aiApiKey: "sk-direct",
+      aiBaseUrl: "https://api.example.com",
+      aiModel: "claude-direct",
+    });
+    const entry = await client.expand("ephemeral", "context");
+    expect(entry.subject).toBe("英文词汇");
+    expect(entry.translation).toBe("短暂的；瞬息的");
+    expect(entry.pos).toBe("adj.");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(url).toBe("https://api.example.com/v1/messages");
+    expect(url).not.toContain("127.0.0.1:8765");
+  });
+
+  it("routes generateQuestions to direct AI when configured", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              questions: [
+                { type: "tf", text: "q", answer: "对", explanation: "" },
+              ],
+            }),
+          },
+        ],
+      }),
+    );
+    const client = new CloakfetchClient({
+      ...baseSettings,
+      aiApiKey: "sk-direct",
+    });
+    const qs = await client.generateQuestions("Title", "Body", 3);
+    expect(qs.length).toBe(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(url.startsWith("https://api.anthropic.com/")).toBe(true);
+  });
+
+  it("falls back to the local service when AI fields are empty", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        ok: true,
+        subject: "数学",
+        translation: "",
+        pos: "",
+        markdown: "# Math",
+      }),
+    );
+    const client = new CloakfetchClient({ ...baseSettings, aiApiKey: "" });
+    const entry = await client.expand("极限");
+    expect(entry.subject).toBe("数学");
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(url).toBe("http://127.0.0.1:8765/ai/expand");
+  });
+
+  it("falls back when aiModel is empty even if other fields are set", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ ok: true, subject: "化学", translation: "", pos: "", markdown: "# Chem" }),
+    );
+    const client = new CloakfetchClient({
+      ...baseSettings,
+      aiApiKey: "sk",
+      aiBaseUrl: "https://api.example.com",
+      aiModel: "",
+    });
+    const entry = await client.expand("水");
+    expect(entry.subject).toBe("化学");
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(url).toBe("http://127.0.0.1:8765/ai/expand");
+  });
+
+  it("aiHealth reports direct path when configured", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ content: [] }, 200));
+    const client = new CloakfetchClient({
+      ...baseSettings,
+      aiApiKey: "sk-direct",
+    });
+    const result = await client.aiHealth();
+    expect(result.path).toBe("direct");
+    expect(result.ok).toBe(true);
+  });
+
+  it("aiHealth reports service path when direct AI is not configured", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, detail: { v: 1 } }));
+    const client = new CloakfetchClient({ ...baseSettings, aiApiKey: "" });
+    const result = await client.aiHealth();
+    expect(result.path).toBe("service");
+    expect(result.ok).toBe(true);
   });
 });

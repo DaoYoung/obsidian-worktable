@@ -1,4 +1,5 @@
-import type { WorktableSettings } from "../settings";
+import { DirectAiClient } from "./DirectAiClient";
+import { hasDirectAiConfig, type WorktableSettings } from "../settings";
 import { DEFAULT_SETTINGS } from "../settings";
 
 export interface CloakfetchQuestion {
@@ -114,8 +115,35 @@ export class CloakfetchClient {
     return (this.options.baseUrl ?? this.settings.serviceBaseUrl ?? "").replace(/\/+$/, "");
   }
 
+  private get directAi(): DirectAiClient | null {
+    if (!hasDirectAiConfig(this.settings)) return null;
+    return new DirectAiClient({
+      apiKey: this.settings.aiApiKey.trim(),
+      baseUrl: this.settings.aiBaseUrl.trim(),
+      model: this.settings.aiModel.trim(),
+    });
+  }
+
   async health(): Promise<CloakfetchHealthResponse> {
     return this.requestJson<CloakfetchHealthResponse>("/health", { method: "GET" });
+  }
+
+  /**
+   * Ping whichever AI backend is currently active.
+   * Returns a structured result describing which path was taken.
+   */
+  async aiHealth(): Promise<{ ok: boolean; path: "direct" | "service" | "none"; detail?: string }> {
+    const direct = this.directAi;
+    if (direct) {
+      const ok = await direct.ping();
+      return { ok, path: "direct", detail: ok ? `model = ${direct.model}` : "Direct AI request failed" };
+    }
+    try {
+      const res = await this.health();
+      return { ok: !!res.ok, path: "service", detail: res.detail ? JSON.stringify(res.detail) : "" };
+    } catch (err) {
+      return { ok: false, path: "service", detail: (err as Error).message };
+    }
   }
 
   async fetch(url: string, timeoutMs?: number): Promise<CloakfetchFetchResponse> {
@@ -135,6 +163,8 @@ export class CloakfetchClient {
   }
 
   async generateQuestions(title: string, text: string, count = 3, timeoutMs?: number): Promise<CloakfetchQuestion[]> {
+    const direct = this.directAi;
+    if (direct) return direct.generateQuestions(title, text, count);
     const res = await this.requestJson<CloakfetchQuestionsResponse>("/ai/questions", {
       method: "POST",
       body: { title, text, count },
@@ -155,6 +185,8 @@ export class CloakfetchClient {
   }
 
   async extractKeyPoints(title: string, text: string, maxPoints = 8, timeoutMs?: number): Promise<string[]> {
+    const direct = this.directAi;
+    if (direct) return direct.extractKeyPoints(title, text, maxPoints);
     const res = await this.requestJson<CloakfetchExtractResponse>("/ai/extract", {
       method: "POST",
       body: { title, text, maxPoints },
@@ -175,6 +207,8 @@ export class CloakfetchClient {
   }
 
   async expandKnowledge(name: string, context = "", timeoutMs?: number): Promise<ExpandedKnowledge> {
+    const direct = this.directAi;
+    if (direct) return direct.expandKnowledge(name, context);
     const res = await this.requestJson<CloakfetchExpandResponse>("/ai/expand", {
       method: "POST",
       body: { name, context },
