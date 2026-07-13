@@ -1,6 +1,6 @@
 /* ===========================================================================
    Obsidian Worktable — Built Styles
-   Generated: 2026-07-13T15-21-42
+   Generated: 2026-07-13T16-05-37
    Sources:
  *  - src/styles/base.css
  *  - src/styles/productivity.css
@@ -371,6 +371,65 @@
 
 .obsidian-worktable-no-dataview-icon {
   color: var(--color-green, #4caf50);
+}
+
+/* Setup local service wizard */
+.worktable-service-setup {
+  margin-top: 16px;
+  margin-bottom: 24px;
+  padding: 12px 16px;
+  border: 1px solid var(--background-modifier-border, #ddd);
+  border-radius: 8px;
+  background: var(--background-primary-alt, transparent);
+}
+
+.worktable-service-setup h4 {
+  margin: 0 0 6px 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-heading, var(--text-normal));
+}
+
+.worktable-setup-subtitle {
+  margin: 12px 0 4px 0;
+  font-weight: 500;
+  color: var(--text-normal);
+}
+
+.worktable-cmd-wrap {
+  margin: 4px 0 8px 0;
+}
+
+.worktable-cmd {
+  margin: 0;
+  padding: 8px 10px;
+  font-family: var(--font-monospace, monospace);
+  font-size: 0.82rem;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border, #ddd);
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: all;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--text-normal);
+}
+
+.worktable-cmd:hover {
+  border-color: var(--interactive-accent, #7f6df2);
+}
+
+.worktable-cmd-copied {
+  color: var(--color-green, #4caf50);
+  font-weight: 500;
+}
+
+.worktable-service-test-status {
+  margin-top: 8px;
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  min-height: 1.4em;
 }
 
 

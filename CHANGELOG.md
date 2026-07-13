@@ -5,6 +5,24 @@ All notable changes to Obsidian Worktable will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3] - 2026-07-14
+
+### Changed
+
+- The "Service token" setting is now framed as an **advanced override**. The
+  description leads with the auto-discovery path
+  (`~/.config/obsidian-worktable/server.json`) so users know the field can
+  stay empty after running `install-macos.sh`.
+
+### Added
+
+- New **Setup local service** wizard inside the settings tab: shows
+  platform-aware copy-to-clipboard install commands (macOS one-shot
+  installer; Linux / Windows manual instructions) and a **Test connection**
+  button that calls `CloakfetchClient.aiHealth()` and reports whether the
+  local service is reachable — or that direct AI is configured and the
+  local service is optional.
+
 ## [0.2.2] - 2026-07-13
 
 ### Changed

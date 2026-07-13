@@ -1,6 +1,7 @@
 import { App, moment, PluginSettingTab, Setting } from "obsidian";
 import type ObsidianWorktablePlugin from "./main";
 import { getSettingsStrings } from "./settingsStrings";
+import { renderServiceSetup } from "./settingsServiceSetup";
 
 export type AiProvider = "anthropic";
 
@@ -144,6 +145,8 @@ export class WorktableSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           })
       );
+
+    renderServiceSetup(containerEl, this.plugin, t);
 
     containerEl.createEl("h3", { text: t.directAiSection });
     containerEl.createEl("p", {

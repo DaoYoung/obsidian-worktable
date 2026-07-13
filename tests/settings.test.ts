@@ -138,3 +138,71 @@ describe("settings - getSettingsStrings", () => {
     expect(s.knowledgeFileName).toBe("Knowledge file");
   });
 });
+
+describe("settings - service token override wording", () => {
+  it("English token field is labeled as an override, not a primary input", () => {
+    const s = getSettingsStrings("en");
+    expect(s.serviceTokenName).toBe("Service token (advanced override)");
+    // Description leads with the auto-discovery path; manual fill is a fallback.
+    expect(s.serviceTokenDesc).toMatch(/leave empty/i);
+    expect(s.serviceTokenDesc).toMatch(/~?\/\.config\/obsidian-worktable\/server\.json/);
+    expect(s.serviceTokenDesc).toMatch(/override|bypass/i);
+  });
+
+  it("Chinese token field mirrors the English override framing", () => {
+    const s = getSettingsStrings("zh");
+    expect(s.serviceTokenName).toBe("服务令牌(高级覆盖)");
+    expect(s.serviceTokenDesc).toContain("~/.config/obsidian-worktable/server.json");
+    expect(s.serviceTokenDesc).toMatch(/留空|覆盖/);
+  });
+});
+
+describe("settings - setup wizard strings", () => {
+  it("English wizard has heading, intro, and test button label", () => {
+    const s = getSettingsStrings("en");
+    expect(s.serviceSetupHeading).toBe("Setup local service");
+    expect(s.serviceSetupIntro).toMatch(/article fetching|Direct AI/i);
+    expect(s.serviceSetupTestButton).toBe("Test connection");
+    expect(s.serviceSetupCopied).toBe("Copied!");
+  });
+
+  it("English wizard bundles Linux/Windows into a single fallback line", () => {
+    const s = getSettingsStrings("en");
+    expect(s.serviceSetupOtherOs).toMatch(/linux/i);
+    expect(s.serviceSetupOtherOs).toMatch(/windows/i);
+    expect(s.serviceSetupOtherOs).toMatch(/server\.py/);
+  });
+
+  it("English wizard exposes macOS one-shot commands", () => {
+    const s = getSettingsStrings("en");
+    expect(s.serviceSetupMacosTitle).toMatch(/macOS/i);
+    expect(s.serviceSetupMacosCloneCmd).toContain("git clone https://github.com/DaoYoung/obsidian-worktable.git");
+    expect(s.serviceSetupMacosCloneCmd).toContain("~/obsidian-worktable");
+    expect(s.serviceSetupMacosInstallCmd).toBe("bash ~/obsidian-worktable/server/install-macos.sh");
+  });
+
+  it("English wizard formats test results with the configured service base URL", () => {
+    const s = getSettingsStrings("en");
+    expect(s.serviceSetupResultOkServiceAt("http://127.0.0.1:8765"))
+      .toBe("✓ Local service reachable at http://127.0.0.1:8765");
+    expect(s.serviceSetupResultDown("ECONNREFUSED"))
+      .toBe("✗ Local service is not reachable: ECONNREFUSED");
+    expect(s.serviceSetupResultDirectAi).toContain("Direct AI");
+  });
+
+  it("Chinese wizard mirrors the English structure", () => {
+    const s = getSettingsStrings("zh");
+    expect(s.serviceSetupHeading).toBe("本地服务一键安装");
+    expect(s.serviceSetupTestButton).toBe("测试连接");
+    expect(s.serviceSetupCopied).toBe("已复制!");
+    expect(s.serviceSetupMacosInstallCmd).toBe("bash ~/obsidian-worktable/server/install-macos.sh");
+  });
+
+  it("Chinese wizard formats test results with the configured service base URL", () => {
+    const s = getSettingsStrings("zh");
+    expect(s.serviceSetupResultOkServiceAt("http://127.0.0.1:8765"))
+      .toBe("✓ 本地服务可达 http://127.0.0.1:8765");
+    expect(s.serviceSetupResultDown("ECONNREFUSED"))
+      .toBe("✗ 本地服务不可达:ECONNREFUSED");
+  });
+});

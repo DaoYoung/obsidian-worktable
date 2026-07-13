@@ -16,7 +16,7 @@ export default class ObsidianWorktablePlugin extends Plugin {
       (leaf: WorkspaceLeaf) => new WorktableView(leaf, this)
     );
 
-    this.addRibbonIcon("layout-dashboard", "Open Worktable", () => {
+    this.addRibbonIcon("book-open", "Open Worktable", () => {
       WorktableView.openForPlugin(this.app, this);
     });
 

@@ -52,7 +52,7 @@ export class WorktableView extends ItemView {
   }
 
   getIcon(): string {
-    return "layout-dashboard";
+    return "book-open";
   }
 
   override async onOpen(): Promise<void> {

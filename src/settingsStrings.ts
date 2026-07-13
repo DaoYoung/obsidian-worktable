@@ -24,6 +24,21 @@ export interface SettingsStrings {
   openOnStartupDesc: string;
   fallbackProxiesName: string;
   fallbackProxiesDesc: string;
+  serviceSetupHeading: string;
+  serviceSetupIntro: string;
+  serviceSetupMacosTitle: string;
+  serviceSetupMacosStep1: string;
+  serviceSetupMacosCloneCmd: string;
+  serviceSetupMacosStep2: string;
+  serviceSetupMacosInstallCmd: string;
+  serviceSetupOtherOs: string;
+  serviceSetupTestButton: string;
+  serviceSetupTesting: string;
+  serviceSetupResultOkService: string;
+  serviceSetupResultOkServiceAt: (url: string) => string;
+  serviceSetupResultDirectAi: string;
+  serviceSetupResultDown: (detail: string) => string;
+  serviceSetupCopied: string;
   directAiSection: string;
   directAiIntro: string;
   aiProviderName: string;
@@ -52,14 +67,35 @@ const en: SettingsStrings = {
   serviceBaseUrlName: "Service base URL",
   serviceBaseUrlDesc:
     "Base URL for the local Cloakfetch service (used for fetching pages and, when no direct AI key is set, for AI calls).",
-  serviceTokenName: "Service token (optional)",
+  serviceTokenName: "Service token (advanced override)",
   serviceTokenDesc:
-    "Optional bearer token sent as X-Worktable-Token. If empty, the plugin tries ~/.config/obsidian-worktable/server.json.",
+    "Override the auto-discovered service token. Leave empty — the plugin reads from ~/.config/obsidian-worktable/server.json automatically once the install script has been run. Fill only to bypass the config file.",
   openOnStartupName: "Open on startup",
   openOnStartupDesc: "Open the Worktable view automatically when Obsidian starts.",
   fallbackProxiesName: "Enable fallback proxies",
   fallbackProxiesDesc:
     "Allow the Learning widget to fall back to public CORS proxies if the local service is unreachable.",
+  serviceSetupHeading: "Setup local service",
+  serviceSetupIntro:
+    "The local service handles article fetching for the Learning widget. Direct AI calls work without it — skip this section if you only use direct AI.",
+  serviceSetupMacosTitle: "macOS — one-shot install",
+  serviceSetupMacosStep1:
+    "1. Clone the repo (or download server/install-macos.sh from the latest release):",
+  serviceSetupMacosCloneCmd:
+    "git clone https://github.com/DaoYoung/obsidian-worktable.git ~/obsidian-worktable",
+  serviceSetupMacosStep2: "2. Run the installer (sets up venv, deps, and launchd):",
+  serviceSetupMacosInstallCmd:
+    "bash ~/obsidian-worktable/server/install-macos.sh",
+  serviceSetupOtherOs:
+    "Linux / Windows: launchd is unavailable — start the server manually with `python3 server/server.py` after `pip install -r server/requirements.txt`. See the README for details.",
+  serviceSetupTestButton: "Test connection",
+  serviceSetupTesting: "Testing…",
+  serviceSetupResultOkService: "✓ Local service reachable",
+  serviceSetupResultOkServiceAt: (url) => `✓ Local service reachable at ${url}`,
+  serviceSetupResultDirectAi:
+    "✓ Direct AI is configured. The local service is optional.",
+  serviceSetupResultDown: (detail) => `✗ Local service is not reachable: ${detail}`,
+  serviceSetupCopied: "Copied!",
   directAiSection: "Direct AI (optional)",
   directAiIntro:
     "When all three fields below are filled, the plugin calls AI directly through the Anthropic Messages API and does not need the local Cloakfetch service for AI features. Leave blank to keep using the local service.",
@@ -93,14 +129,34 @@ const zh: SettingsStrings = {
   serviceBaseUrlName: "服务地址",
   serviceBaseUrlDesc:
     "本地 Cloakfetch 服务的访问地址,用于抓取网页;未配置直连 AI 时,AI 调用也走这里。",
-  serviceTokenName: "服务令牌(可选)",
+  serviceTokenName: "服务令牌(高级覆盖)",
   serviceTokenDesc:
-    "可选的 Bearer 令牌,以 X-Worktable-Token 请求头发送。留空时自动尝试 ~/.config/obsidian-worktable/server.json。",
+    "覆盖自动发现的服务令牌。一般留空即可——运行安装脚本后,插件会自动从 ~/.config/obsidian-worktable/server.json 读取。仅在需要绕过配置文件时才填写。",
   openOnStartupName: "启动时自动打开",
   openOnStartupDesc: "Obsidian 启动时自动打开 Worktable 视图。",
   fallbackProxiesName: "启用公共代理回退",
   fallbackProxiesDesc:
     "本地服务不可用时,允许学习模块回退到公共 CORS 代理。",
+  serviceSetupHeading: "本地服务一键安装",
+  serviceSetupIntro:
+    "本地服务用于学习模块抓取网页。直连 AI 不依赖它——只用直连 AI 时可跳过本节。",
+  serviceSetupMacosTitle: "macOS —— 一键安装",
+  serviceSetupMacosStep1:
+    "1. 克隆仓库(或从最新 Release 单独下载 server/install-macos.sh):",
+  serviceSetupMacosCloneCmd:
+    "git clone https://github.com/DaoYoung/obsidian-worktable.git ~/obsidian-worktable",
+  serviceSetupMacosStep2: "2. 运行安装脚本(自动建 venv、装依赖、注册 launchd):",
+  serviceSetupMacosInstallCmd:
+    "bash ~/obsidian-worktable/server/install-macos.sh",
+  serviceSetupOtherOs:
+    "Linux / Windows:launchd 不可用,需手动 `python3 server/server.py` 启动,先 `pip install -r server/requirements.txt`。详见 README。",
+  serviceSetupTestButton: "测试连接",
+  serviceSetupTesting: "测试中…",
+  serviceSetupResultOkService: "✓ 本地服务可达",
+  serviceSetupResultOkServiceAt: (url) => `✓ 本地服务可达 ${url}`,
+  serviceSetupResultDirectAi: "✓ 已配置直连 AI。本地服务可选。",
+  serviceSetupResultDown: (detail) => `✗ 本地服务不可达:${detail}`,
+  serviceSetupCopied: "已复制!",
   directAiSection: "直连 AI(可选)",
   directAiIntro:
     "当下列三项均填写后,插件将通过 Anthropic Messages API 直接调用 AI,不再依赖本地 Cloakfetch 服务。留空则继续使用本地服务。",

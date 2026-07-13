@@ -93,7 +93,7 @@ npm run verify
 | Knowledge file | `plans/知识点.md` | 学习模块写入、复习模块读取的知识库路径（vault 相对路径） |
 | News folder | `news` | 新闻模块读取的目录；目录外但带 `#news` 标签的文件也会被收录 |
 | Service base URL | `http://127.0.0.1:8765` | 本地 Cloakfetch 服务地址 |
-| Service token（可选） | `""` | 访问本地服务时携带的 `X-Worktable-Token`；留空则尝试从 `~/.config/obsidian-worktable/server.json` 读取 |
+| Service token（可选） | `""` | 高级覆盖项。**默认留空**——插件会自动从 `~/.config/obsidian-worktable/server.json` 读取（运行 `install-macos.sh` 后会写入）。仅在需要绕过该配置文件时填写。 |
 | Open on startup | ✅ | 启动 Obsidian 时自动打开 Worktable 视图 |
 | Enable fallback proxies | ✅ | 学习模块抓取失败时回退到公共 CORS 代理 |
 | Provider | `anthropic` | AI 提供方，目前仅支持 Anthropic Messages API |
@@ -111,7 +111,28 @@ API key 与其它设置一样，存储在 Obsidian 的 `.obsidian/plugins/obsidi
 
 ### 服务配置文件
 
-本地 Cloakfetch 服务通过 `~/.config/obsidian-worktable/server.json` 读取配置（参考 [server/config.example.json](./server/config.example.json)）。插件设置中填写的 "Service token" 等同于下表中的 `serviceToken` 字段，优先级 **高于** 配置文件。
+本地 Cloakfetch 服务通过 `~/.config/obsidian-worktable/server.json` 读取配置（参考 [server/config.example.json](./server/config.example.json)）。
+
+#### Token 自动发现
+
+`serviceToken` 字段按以下顺序解析（高到低）：
+
+1. 插件设置中"Service token"输入框（**高级覆盖**——一般不需要填）
+2. `~/.config/obsidian-worktable/server.json` 中的 `serviceToken` 字段
+3. `/etc/obsidian-worktable/server.json` 中的 `serviceToken` 字段
+4. 都为空 → 服务端按 `_check_auth` 放行（无 token 模式）
+
+只要运行过 `install-macos.sh`，token 就会自动写入步骤 2，**插件无需任何配置即可与本地服务通信**。只有当你需要强制覆盖配置文件中的 token 时，才需要在插件设置里填写。
+
+插件设置中填写的 "Service token" 等同于下表中的 `serviceToken` 字段，优先级 **高于** 配置文件。
+
+#### 设置页一键安装向导
+
+设置页"本地 Cloakfetch 服务"小节下方的 **Setup local service** 卡片提供：
+
+- **macOS**：显示两条可点击复制的命令——`git clone ...` 与 `bash .../install-macos.sh`。点击代码块即复制，复制后短暂显示"Copied!"。无需离开 Obsidian 即可获取安装指令。
+- **Linux / Windows**：launchd 不可用，提示手动 `python3 server/server.py`（详见下方"手动启动"）。
+- **Test connection**：调用 `CloakfetchClient.aiHealth()` 验证当前配置可连通（直连 AI 时显示"Direct AI 已配置，本地服务可选"）。
 
 #### 完整字段
 
