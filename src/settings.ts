@@ -1,5 +1,6 @@
-import { App, PluginSettingTab, Setting } from "obsidian";
+import { App, moment, PluginSettingTab, Setting } from "obsidian";
 import type ObsidianWorktablePlugin from "./main";
+import { getSettingsStrings } from "./settingsStrings";
 
 export type AiProvider = "anthropic";
 
@@ -55,13 +56,19 @@ export class WorktableSettingTab extends PluginSettingTab {
     containerEl.empty();
     containerEl.addClass("obsidian-worktable-settings");
 
-    containerEl.createEl("h2", { text: "Obsidian Worktable" });
+    // Resolve labels per render. The settings tab re-renders whenever the
+    // user opens it (and after a language change), so we don't need to
+    // subscribe to changes. `moment.locale()` is the public Obsidian API for
+    // reading the active UI locale.
+    const t = getSettingsStrings(moment.locale() ?? null);
 
-    containerEl.createEl("h3", { text: "Vault paths" });
+    containerEl.createEl("h2", { text: t.heading });
+
+    containerEl.createEl("h3", { text: t.pathSection });
 
     new Setting(containerEl)
-      .setName("Knowledge file")
-      .setDesc("Vault-relative path used by the Learning and Review widgets (e.g. plans/知识点.md).")
+      .setName(t.knowledgeFileName)
+      .setDesc(t.knowledgeFileDesc)
       .addText((text) =>
         text
           .setPlaceholder("plans/知识点.md")
@@ -73,8 +80,8 @@ export class WorktableSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("News folder")
-      .setDesc("Folder used by the News widget. Files outside this folder with the #news tag are also picked up.")
+      .setName(t.newsFolderName)
+      .setDesc(t.newsFolderDesc)
       .addText((text) =>
         text
           .setPlaceholder("news")
@@ -85,11 +92,11 @@ export class WorktableSettingTab extends PluginSettingTab {
           })
       );
 
-    containerEl.createEl("h3", { text: "Local Cloakfetch service" });
+    containerEl.createEl("h3", { text: t.serviceSection });
 
     new Setting(containerEl)
-      .setName("Service base URL")
-      .setDesc("Base URL for the local Cloakfetch service (used for fetching pages and, when no direct AI key is set, for AI calls).")
+      .setName(t.serviceBaseUrlName)
+      .setDesc(t.serviceBaseUrlDesc)
       .addText((text) =>
         text
           .setPlaceholder("http://127.0.0.1:8765")
@@ -101,8 +108,8 @@ export class WorktableSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Service token (optional)")
-      .setDesc("Optional bearer token sent as X-Worktable-Token. If empty, the plugin tries ~/.config/obsidian-worktable/server.json.")
+      .setName(t.serviceTokenName)
+      .setDesc(t.serviceTokenDesc)
       .addText((text) => {
         text
           .setPlaceholder("(empty)")
@@ -115,8 +122,8 @@ export class WorktableSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
-      .setName("Open on startup")
-      .setDesc("Open the Worktable view automatically when Obsidian starts.")
+      .setName(t.openOnStartupName)
+      .setDesc(t.openOnStartupDesc)
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.openOnStartup)
@@ -127,8 +134,8 @@ export class WorktableSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Enable fallback proxies")
-      .setDesc("Allow the Learning widget to fall back to public CORS proxies if the local service is unreachable.")
+      .setName(t.fallbackProxiesName)
+      .setDesc(t.fallbackProxiesDesc)
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.enableFallbackProxies)
@@ -138,19 +145,18 @@ export class WorktableSettingTab extends PluginSettingTab {
           })
       );
 
-    containerEl.createEl("h3", { text: "Direct AI (optional)" });
+    containerEl.createEl("h3", { text: t.directAiSection });
     containerEl.createEl("p", {
       cls: "setting-item-description",
-      text:
-        "When all three fields below are filled, the plugin calls AI directly through the Anthropic Messages API and does not need the local Cloakfetch service for AI features. Leave blank to keep using the local service.",
+      text: t.directAiIntro,
     });
 
     new Setting(containerEl)
-      .setName("Provider")
-      .setDesc("AI provider. Only Anthropic is supported in this release.")
+      .setName(t.aiProviderName)
+      .setDesc(t.aiProviderDesc)
       .addDropdown((dropdown) =>
         dropdown
-          .addOption("anthropic", "Anthropic (Messages API)")
+          .addOption("anthropic", t.aiProviderOption)
           .setValue(this.plugin.settings.aiProvider)
           .onChange(async (value) => {
             this.plugin.settings.aiProvider = (value as AiProvider) || "anthropic";
@@ -159,8 +165,8 @@ export class WorktableSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("API key")
-      .setDesc("Anthropic API key (sk-ant-...). Stored in the plugin's data.json like any other setting.")
+      .setName(t.aiApiKeyName)
+      .setDesc(t.aiApiKeyDesc)
       .addText((text) => {
         text
           .setPlaceholder("sk-ant-...")
@@ -174,8 +180,8 @@ export class WorktableSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
-      .setName("Base URL")
-      .setDesc("Anthropic-compatible endpoint. Use https://api.anthropic.com for the official API, or a proxy/MiniMax-compatible URL.")
+      .setName(t.aiBaseUrlName)
+      .setDesc(t.aiBaseUrlDesc)
       .addText((text) =>
         text
           .setPlaceholder("https://api.anthropic.com")
@@ -187,8 +193,8 @@ export class WorktableSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Model")
-      .setDesc("Model identifier sent in the API request (e.g. claude-sonnet-4-5).")
+      .setName(t.aiModelName)
+      .setDesc(t.aiModelDesc)
       .addText((text) =>
         text
           .setPlaceholder("claude-sonnet-4-5")
@@ -202,8 +208,8 @@ export class WorktableSettingTab extends PluginSettingTab {
     const aiStatus = containerEl.createDiv({ cls: "worktable-ai-status" });
     aiStatus.setText(
       hasDirectAiConfig(this.plugin.settings)
-        ? `✓ Direct AI active · model = ${this.plugin.settings.aiModel}`
-        : "Direct AI not configured — using the local Cloakfetch service for AI calls.",
+        ? t.aiStatusActive(this.plugin.settings.aiModel)
+        : t.aiStatusInactive,
     );
   }
 }

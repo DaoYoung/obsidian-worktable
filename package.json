@@ -1,6 +1,6 @@
 {
   "name": "obsidian-worktable",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "A native Obsidian dashboard for focus, tasks, learning, review, and news.",
   "type": "module",
   "private": true,

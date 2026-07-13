@@ -5,6 +5,19 @@ All notable changes to Obsidian Worktable will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-07-13
+
+### Changed
+
+- Settings tab is now locale-aware. When Obsidian's language is set to a
+  Chinese variant (`zh`, `zh-CN`, `zh-TW`, `zh-HK`), the Worktable settings
+  panel renders Chinese labels and descriptions for every field, including
+  the new "直连 AI" section. Any other language falls back to English so
+  non-Chinese users keep the existing copy.
+- The active locale is read via Obsidian's public `moment.locale()` API on
+  every render of the settings tab, so switching Obsidian's language takes
+  effect on the next open without reloading the plugin.
+
 ## [0.2.1] - 2026-07-13
 
 ### Changed
