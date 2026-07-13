@@ -5,8 +5,8 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "node esbuild.config.mjs",
-    "build": "node esbuild.config.mjs production",
+    "dev": "node scripts/build-styles.mjs && node esbuild.config.mjs",
+    "build": "node scripts/build-styles.mjs && node esbuild.config.mjs production",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:server": "python3 -m unittest discover -s server/tests -v",

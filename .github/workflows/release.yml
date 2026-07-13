@@ -1,0 +1,48 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Check artifacts
+        run: npm run check:artifacts
+
+      - name: Read version
+        id: version
+        run: echo "VERSION=$(node -e "console.log(require('./manifest.json').version)")" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: CHANGELOG.md
+          draft: true
+          files: |
+            main.js
+            manifest.json
+            styles.css
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

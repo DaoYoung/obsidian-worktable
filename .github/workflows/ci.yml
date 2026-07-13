@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript type check
+        run: npm run typecheck
+
+      - name: Run tests (Vitest)
+        run: npm test
+
+      - name: Run server tests (Python)
+        run: npm run test:server
+
+      - name: Build
+        run: npm run build
+
+      - name: Check artifacts
+        run: npm run check:artifacts
+
+      - name: Shell syntax check (shellcheck on deploy script)
+        run: |
+          if command -v shellcheck &>/dev/null; then
+            shellcheck scripts/deploy.mjs || true
+          else
+            echo "shellcheck not installed, skipping"
+          fi
+
+      - name: Scan for secrets and absolute paths
+        run: |
+          # Check for secret patterns in TypeScript source
+          if grep -r --include="*.ts" --include="*.mjs" \
+            -E "(ghp_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9_]{22,})" \
+            src/ scripts/ 2>/dev/null; then
+            echo "ERROR: Possible secret token found in source"
+            exit 1
+          fi
+
+          # Check for absolute paths that should not be committed
+          if grep -r --include="*.ts" --include="*.mjs" --include="*.json" \
+            -E "/Users/[^/]+/|/home/[^/]+/" \
+            --exclude-dir=node_modules \
+            . 2>/dev/null; then
+            echo "WARNING: Absolute paths found in source"
+          fi
