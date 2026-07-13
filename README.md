@@ -80,27 +80,70 @@ npm run verify
 
 插件开箱即用，无需额外配置即可正常运行。
 
-### 服务 Token 配置
+### 服务配置文件
 
-插件连接本地 Cloakfetch 服务时支持三种 Token 配置方式（按优先级从高到低）：
+本地 Cloakfetch 服务通过 `~/.config/obsidian-worktable/server.json` 读取配置（参考 [server/config.example.json](./server/config.example.json)）。插件设置中填写的 "Service token" 等同于下表中的 `serviceToken` 字段，优先级 **高于** 配置文件。
 
-1. **插件设置** — 在 Obsidian 设置中直接填写 "Service token"
-2. **本地配置文件** — `~/.config/obsidian-worktable/server.json`
-3. **默认** — 空 Token
+#### 完整字段
 
-配置文件格式：
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `host` | string | `127.0.0.1` | 监听地址。**不要改为 `0.0.0.0`**，否则会暴露到局域网 |
+| `port` | int | `8765` | 监听端口 |
+| `serviceToken` | string | `""` | 客户端访问服务时需携带 `X-Worktable-Token` 头。**留空表示不鉴权**（仅适合本地无信任威胁的场景） |
+| `aiAuthToken` | string | `""` | Anthropic 兼容 API 的密钥。字段别名 `anthropicApiKey` 也可识别 |
+| `aiBaseUrl` | string | `https://api.anthropic.com` | API base URL，可指向任何 Anthropic 兼容端点（如自建代理、中转服务） |
+| `aiModel` | string | `claude-sonnet-4-5` | 模型 ID |
+| `aiMaxTokens` | int | `2048` | 单次请求最大生成 token 数 |
+| `aiTimeout` | int | `60` | AI 请求超时（秒） |
+| `upstreamFetchTimeout` | int | `30` | `/fetch` 抓取上游网页的超时（秒） |
+
+#### 完整配置示例
 
 ```json
 {
-  "token": "your-service-token"
+  "host": "127.0.0.1",
+  "port": 8765,
+  "serviceToken": "your-service-token-here",
+  "aiAuthToken": "sk-ant-api03-xxxxxxxx",
+  "aiBaseUrl": "https://api.anthropic.com",
+  "aiModel": "claude-sonnet-4-5",
+  "aiMaxTokens": 2048,
+  "aiTimeout": 60,
+  "upstreamFetchTimeout": 30
 }
 ```
+
+#### 环境变量覆盖
+
+任何字段都可通过 `WORKTABLE_<FIELD_NAME>` 环境变量覆盖（驼峰转 `UPPER_SNAKE`），优先级 **高于** 配置文件：
+
+```bash
+export WORKTABLE_SERVICE_TOKEN="your-service-token"
+export WORKTABLE_AI_AUTH_TOKEN="sk-ant-api03-xxxxxxxx"
+export WORKTABLE_AI_BASE_URL="https://your-proxy.example.com"
+export WORKTABLE_PORT=9001
+```
+
+#### AI 密钥解析优先级
+
+`aiAuthToken` 字段按以下优先级解析（高到低）：
+
+1. `ANTHROPIC_AUTH_TOKEN` 或 `ANTHROPIC_API_KEY` 环境变量
+2. 配置文件中的 `aiAuthToken`（或别名 `anthropicApiKey`）
+3. `~/.claude/settings.json` 中 `env.ANTHROPIC_AUTH_TOKEN`（或 `ANTHROPIC_API_KEY`）
+
+> `aiBaseUrl` 和 `aiModel` 同样会从上述环境变量（`ANTHROPIC_BASE_URL`、`ANTHROPIC_MODEL`）读取。
 
 ### 服务 Token 安全
 
 - Token 仅发送给本地 Cloakfetch 服务（默认 `http://127.0.0.1:8765`），不会发送至第三方
-- Token 存储在本地配置中，不上传至 GitHub
-- 建议使用文件权限保护 `~/.config/obsidian-worktable/server.json`
+- AI 密钥仅在调用 `/ai/*` 端点时使用，按上述优先级解析
+- Token 存储在本地配置中，不上传至 GitHub（仓库的 `.gitignore` 已排除 `server/config.json`）
+- 建议使用文件权限保护 `~/.config/obsidian-worktable/server.json`：
+  ```bash
+  chmod 600 ~/.config/obsidian-worktable/server.json
+  ```
 
 ## 端点说明
 
