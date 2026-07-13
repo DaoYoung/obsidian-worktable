@@ -1,0 +1,11 @@
+{
+  "host": "127.0.0.1",
+  "port": 8765,
+  "serviceToken": "",
+  "aiAuthToken": "",
+  "aiBaseUrl": "https://api.anthropic.com",
+  "aiModel": "claude-sonnet-4-5",
+  "aiMaxTokens": 2048,
+  "aiTimeout": 60,
+  "upstreamFetchTimeout": 30
+}
