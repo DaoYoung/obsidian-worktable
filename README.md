@@ -9,7 +9,7 @@
 - **本地数据兼容** — 纯原生实现，数据完全存储在 vault 中
 - **热更新样式** — 样式与逻辑分离，支持自定义主题
 - **服务状态监控** — 实时查看服务连接状态
-- **AI 配置优先** — 支持从 `~/.claude/settings.json` 读取 AI 配置
+- **AI 配置优先** — 支持从 `~/.config/obsidian-worktable/server.json` 读取服务 Token
 
 ## 系统要求
 
@@ -80,31 +80,27 @@ npm run verify
 
 插件开箱即用，无需额外配置即可正常运行。
 
-### AI 配置
+### 服务 Token 配置
 
-插件支持从 `~/.claude/settings.json` 读取 AI 配置以实现高级功能：
+插件连接本地 Cloakfetch 服务时支持三种 Token 配置方式（按优先级从高到低）：
+
+1. **插件设置** — 在 Obsidian 设置中直接填写 "Service token"
+2. **本地配置文件** — `~/.config/obsidian-worktable/server.json`
+3. **默认** — 空 Token
+
+配置文件格式：
 
 ```json
 {
-  "ai": {
-    "provider": "anthropic",
-    "apiKey": "your-api-key",
-    "model": "claude-sonnet-4-20250514"
-  }
+  "token": "your-service-token"
 }
 ```
 
-此配置仅用于 AI 功能增强，不会影响 Obsidian 本身的功能。
-
-**配置优先级**：插件内部配置 > `~/.claude/settings.json` > 默认配置
-
 ### 服务 Token 安全
 
-使用 AI 功能时，API Token 遵循以下安全原则：
-
-- Token 仅在本地使用，不会发送至第三方服务器
+- Token 仅发送给本地 Cloakfetch 服务（默认 `http://127.0.0.1:8765`），不会发送至第三方
 - Token 存储在本地配置中，不上传至 GitHub
-- 建议使用环境变量或安全的密钥管理工具管理 Token
+- 建议使用文件权限保护 `~/.config/obsidian-worktable/server.json`
 
 ## 端点说明
 
