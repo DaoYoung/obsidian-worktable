@@ -2,6 +2,7 @@ import type { WidgetContext } from "../types";
 import type { PomDb } from "../storage/pomodoroDb";
 
 const STORAGE_KEY = "pomo-state-v1";
+const RECENT_HISTORY_LIMIT = 3;
 const RING_CIRCUMFERENCE = 2 * Math.PI * 100; // 628.3185
 
 interface PomState {
@@ -527,7 +528,7 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
       return;
     }
     try {
-      const [recs, st] = await Promise.all([db.recent(20), db.stats()]);
+      const [recs, st] = await Promise.all([db.recent(RECENT_HISTORY_LIMIT), db.stats()]);
       const list = $("pomo-list")!;
       if (recs.length === 0) {
         list.innerHTML =
