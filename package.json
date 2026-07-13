@@ -1,0 +1,28 @@
+{
+  "name": "obsidian-worktable",
+  "version": "0.1.0",
+  "description": "A native Obsidian dashboard for focus, tasks, learning, review, and news.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "node esbuild.config.mjs production",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:server": "python3 -m unittest discover -s server/tests -v",
+    "check:artifacts": "node scripts/check-artifacts.mjs",
+    "verify": "npm run typecheck && npm test && npm run test:server && npm run build && npm run check:artifacts",
+    "deploy": "node scripts/deploy.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "builtin-modules": "^5.0.0",
+    "esbuild": "^0.25.0",
+    "obsidian": "^1.8.7",
+    "typescript": "^5.8.0",
+    "vitest": "^3.2.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
