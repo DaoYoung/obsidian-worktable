@@ -1,0 +1,240 @@
+import type { WorktableSettings } from "../settings";
+
+export interface CloakfetchQuestion {
+  type: "mc" | "cloze" | "tf" | "short";
+  text: string;
+  answer: string;
+  options?: string[];
+  explanation?: string;
+}
+
+export interface CloakfetchQuestionsResponse {
+  ok: boolean;
+  questions?: CloakfetchQuestion[];
+  error?: string;
+}
+
+export interface CloakfetchExtractResponse {
+  ok: boolean;
+  keyPoints?: string[];
+  error?: string;
+}
+
+export interface CloakfetchExpandResponse {
+  ok: boolean;
+  markdown?: string;
+  error?: string;
+}
+
+export interface CloakfetchFetchResponse {
+  ok: boolean;
+  html?: string;
+  error?: string;
+}
+
+export interface CloakfetchHealthResponse {
+  ok: boolean;
+  detail?: Record<string, unknown>;
+  error?: string;
+}
+
+export class CloakfetchError extends Error {
+  public readonly status: number;
+  public readonly body: string;
+  public readonly endpoint: string;
+
+  constructor(message: string, opts: { status: number; body: string; endpoint: string }) {
+    super(message);
+    this.name = "CloakfetchError";
+    this.status = opts.status;
+    this.body = opts.body;
+    this.endpoint = opts.endpoint;
+  }
+}
+
+export interface CloakfetchClientOptions {
+  baseUrl?: string;
+  token?: string;
+  defaultTimeoutMs?: number;
+  tokenProvider?: () => string | undefined;
+}
+
+const DEFAULT_TIMEOUT_MS = 15_000;
+const SERVER_CONFIG_PATHS = [
+  "/Users/yidao/.config/obsidian-worktable/server.json",
+  "/etc/obsidian-worktable/server.json",
+];
+
+interface CachedToken {
+  value: string;
+  loadedAt: number;
+}
+
+export class CloakfetchClient {
+  private readonly settings: WorktableSettings;
+  private readonly options: CloakfetchClientOptions;
+  private cachedToken: CachedToken | null = null;
+
+  constructor(settings: WorktableSettings, options: CloakfetchClientOptions = {}) {
+    this.settings = settings;
+    this.options = options;
+  }
+
+  private get baseUrl(): string {
+    return (this.options.baseUrl ?? this.settings.serviceBaseUrl ?? "").replace(/\/+$/, "");
+  }
+
+  async health(): Promise<CloakfetchHealthResponse> {
+    return this.requestJson<CloakfetchHealthResponse>("/health", { method: "GET" });
+  }
+
+  async fetch(url: string, timeoutMs?: number): Promise<CloakfetchFetchResponse> {
+    const search = new URLSearchParams({ url }).toString();
+    return this.requestJson<CloakfetchFetchResponse>(`/fetch?${search}`, {
+      method: "GET",
+      timeoutMs,
+    });
+  }
+
+  async questions(title: string, text: string, count = 3, timeoutMs?: number): Promise<CloakfetchQuestion[]> {
+    const res = await this.requestJson<CloakfetchQuestionsResponse>("/ai/questions", {
+      method: "POST",
+      body: { title, text, count },
+      timeoutMs,
+    });
+    if (!res.ok) {
+      throw new CloakfetchError(res.error || "AI question generation failed", {
+        status: 0,
+        body: JSON.stringify(res),
+        endpoint: "/ai/questions",
+      });
+    }
+    return res.questions ?? [];
+  }
+
+  async extract(title: string, text: string, maxPoints = 8, timeoutMs?: number): Promise<string[]> {
+    const res = await this.requestJson<CloakfetchExtractResponse>("/ai/extract", {
+      method: "POST",
+      body: { title, text, maxPoints },
+      timeoutMs,
+    });
+    if (!res.ok) {
+      throw new CloakfetchError(res.error || "AI extract failed", {
+        status: 0,
+        body: JSON.stringify(res),
+        endpoint: "/ai/extract",
+      });
+    }
+    return res.keyPoints ?? [];
+  }
+
+  async expand(name: string, context = "", timeoutMs?: number): Promise<string> {
+    const res = await this.requestJson<CloakfetchExpandResponse>("/ai/expand", {
+      method: "POST",
+      body: { name, context },
+      timeoutMs,
+    });
+    if (!res.ok) {
+      throw new CloakfetchError(res.error || "AI expand failed", {
+        status: 0,
+        body: JSON.stringify(res),
+        endpoint: "/ai/expand",
+      });
+    }
+    return res.markdown ?? "";
+  }
+
+  private async resolveToken(): Promise<string> {
+    if (this.options.tokenProvider) {
+      const provided = this.options.tokenProvider();
+      if (provided) return provided;
+    }
+    if (this.options.token) return this.options.token;
+    if (this.settings.serviceToken) return this.settings.serviceToken;
+    if (this.cachedToken && Date.now() - this.cachedToken.loadedAt < 60_000) {
+      return this.cachedToken.value;
+    }
+    const fromDisk = await readTokenFromDisk();
+    this.cachedToken = { value: fromDisk, loadedAt: Date.now() };
+    return fromDisk;
+  }
+
+  private async requestJson<T>(
+    path: string,
+    init: { method: string; body?: unknown; timeoutMs?: number }
+  ): Promise<T> {
+    const url = `${this.baseUrl}${path}`;
+    const controller = new AbortController();
+    const timeout = init.timeoutMs ?? this.options.defaultTimeoutMs ?? DEFAULT_TIMEOUT_MS;
+    const timer = setTimeout(() => controller.abort(), timeout);
+    const token = await this.resolveToken();
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (token) headers["X-Worktable-Token"] = token;
+    try {
+      const res = await fetch(url, {
+        method: init.method,
+        headers,
+        body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
+        signal: controller.signal,
+      });
+      const text = await res.text();
+      let parsed: unknown = null;
+      if (text) {
+        try {
+          parsed = JSON.parse(text);
+        } catch (_err) {
+          parsed = { ok: false, error: text.slice(0, 300) };
+        }
+      } else {
+        parsed = { ok: false, error: "Empty response body" };
+      }
+      if (!res.ok) {
+        const message =
+          (parsed && typeof parsed === "object" && "error" in parsed && typeof (parsed as { error?: string }).error === "string"
+            ? (parsed as { error?: string }).error
+            : null) ?? `HTTP ${res.status}`;
+        throw new CloakfetchError(message, { status: res.status, body: text.slice(0, 1000), endpoint: path });
+      }
+      return parsed as T;
+    } catch (err) {
+      if (err instanceof CloakfetchError) throw err;
+      if ((err as { name?: string })?.name === "AbortError") {
+        throw new CloakfetchError(`Request to ${path} timed out after ${timeout}ms`, {
+          status: 0,
+          body: "",
+          endpoint: path,
+        });
+      }
+      throw new CloakfetchError(`Request to ${path} failed: ${(err as Error).message ?? String(err)}`, {
+        status: 0,
+        body: "",
+        endpoint: path,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+}
+
+async function readTokenFromDisk(): Promise<string> {
+  if (typeof require === "undefined") return "";
+  try {
+    // Lazy require so this module is safe to import in non-Node environments.
+    // Obsidian's plugin runtime is desktop-only and always has node modules.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const fs = require("node:fs") as typeof import("node:fs");
+    for (const p of SERVER_CONFIG_PATHS) {
+      try {
+        if (!fs.existsSync(p)) continue;
+        const raw = fs.readFileSync(p, "utf-8");
+        const obj = JSON.parse(raw) as { token?: unknown };
+        if (obj && typeof obj.token === "string") return obj.token;
+      } catch (_err) {
+        // Try next path
+      }
+    }
+  } catch (_err) {
+    // require unavailable
+  }
+  return "";
+}
