@@ -2,7 +2,8 @@ import type { WidgetContext } from "../types";
 import type { PomDb } from "../storage/pomodoroDb";
 
 const STORAGE_KEY = "pomo-state-v1";
-const RECENT_HISTORY_LIMIT = 3;
+/** Fetch & render the most recent 20 records; CSS shows ~6 by default with overflow scrolling. */
+const RECENT_HISTORY_LIMIT = 20;
 const RING_CIRCUMFERENCE = 2 * Math.PI * 100; // 628.3185
 
 interface PomState {
@@ -223,6 +224,7 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
   btnPause.className = "pomo-ctrl";
   btnPause.id = "pomo-btn-pause";
   btnPause.disabled = true;
+  btnPause.textContent = "⏸ 暂停";
   ctrlDiv.appendChild(btnPause);
 
   const btnReset = document.createElement("button");
@@ -330,6 +332,7 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
       : state.pausedRemain != null && state.pausedRemain < totalSecs
       ? "▶ 继续"
       : "▶ 开始";
+    btnPause.textContent = state.running ? "⏸ 暂停" : "▶ 继续";
 
     modesDiv.querySelectorAll(".pomo-mode-btn").forEach((b) => {
       (b as HTMLElement).classList.toggle("active", (b as HTMLElement).dataset.mode === state.mode);

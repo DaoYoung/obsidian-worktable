@@ -5,6 +5,24 @@ All notable changes to Obsidian Worktable will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-07-13
+
+### Changed
+
+- Pomodoro widget now shows 20 records in a scrollable list (~6 visible at a
+  time); the pause button label cycles between `⏸ 暂停` (running) and
+  `▶ 继续` (paused) instead of being left empty.
+
+### Fixed
+
+- Learning widget gained a polished card frame (gradient background, rounded
+  corners, drop shadow) and full typography for status badges, sections,
+  options, feedback, explanations, key-point list, and concept previews so
+  the panel no longer renders as a flat form.
+- Review "定义解释" button now actually reveals the markdown body — the CSS
+  selector matched a `.revealed` class but the widget toggles `.open`, so the
+  body stayed hidden. Both classes now style the open state.
+
 ## [0.2.0] - 2026-07-13
 
 ### Added

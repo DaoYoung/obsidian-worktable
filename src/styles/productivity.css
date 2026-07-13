@@ -231,7 +231,7 @@
   min-height: 120px;
   display: flex;
   flex-direction: column;
-  max-height: 240px;
+  max-height: 200px;
 }
 
 .obsidian-worktable .pomo-history h4 {
