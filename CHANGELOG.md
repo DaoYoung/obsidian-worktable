@@ -5,6 +5,45 @@ All notable changes to Obsidian Worktable will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-07-14
+
+### Added
+
+- **Multi-provider direct AI.** The Direct AI section in Settings now
+  offers nine providers, each with a per-provider default base URL and
+  model that auto-populate when you switch:
+  - **Anthropic (Claude)** — `claude-sonnet-4-5`
+  - **OpenAI (GPT)** — `gpt-4o-mini`
+  - **Google Gemini** — `gemini-2.0-flash`
+  - **DeepSeek** — `deepseek-chat`
+  - **Moonshot (Kimi)** — `moonshot-v1-8k`
+  - **Zhipu (GLM)** — `glm-4-flash`
+  - **Alibaba Bailian (Qwen)** — `qwen-plus`
+  - **Volcengine (Doubao)** — `doubao-1-5-pro-32k-250115`
+  - **MiniMax** — `MiniMax-M3`
+- A new `src/services/ai/` module — `types.ts`, `anthropic.ts`,
+  `openaiCompat.ts`, `gemini.ts`, `registry.ts`, `client.ts` — models each
+  provider as a spec with `buildRequest` / `parseResponse` / `parseError`.
+  Anthropic-compatible proxies (MiniMax) share the Anthropic helpers; the
+  six OpenAI-compatible Chinese providers share the OpenAI helpers; Gemini
+  has its own. The transport is shared via a single `AiClient.call()`.
+- 55 new unit tests in `tests/aiProviders.test.ts` (one `describe` per
+  provider) lock down the request URL, auth header, body shape, response
+  parser, error parser, and the conditional
+  `anthropic-dangerous-direct-browser-access` header.
+
+### Changed
+
+- **Direct AI dropdown auto-populates base URL and model.** Picking a
+  provider in Settings now writes the provider's defaults to
+  `aiBaseUrl` and `aiModel` and re-renders the panel so the new
+  placeholders / values are visible immediately. The user can still
+  override either field after switching.
+- `DirectAiClient` is now a thin wrapper over `AiClient`. The
+  Anthropic-specific URL/header/body code moved into
+  `src/services/ai/anthropic.ts`; `CloakfetchClient` passes the configured
+  `aiProvider` through unchanged.
+
 ## [0.2.4] - 2026-07-14
 
 ### Fixed

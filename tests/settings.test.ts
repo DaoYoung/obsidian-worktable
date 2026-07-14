@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS, hasDirectAiConfig } from "../src/settings";
+import { AI_PROVIDERS } from "../src/services/ai/registry";
+import { AI_PROVIDER_IDS } from "../src/services/ai/types";
 import { getSettingsStrings, pickSettingsLocale } from "../src/settingsStrings";
 
 describe("settings - defaults", () => {
@@ -66,6 +68,20 @@ describe("settings - hasDirectAiConfig", () => {
         aiModel: "  claude-x  ",
       }),
     ).toBe(true);
+  });
+
+  it("returns true for every supported provider id", () => {
+    for (const id of AI_PROVIDER_IDS) {
+      const spec = AI_PROVIDERS[id];
+      expect(
+        hasDirectAiConfig({
+          aiProvider: id,
+          aiApiKey: "sk-test",
+          aiBaseUrl: spec.defaultBaseUrl,
+          aiModel: spec.defaultModel,
+        }),
+      ).toBe(true);
+    }
   });
 });
 

@@ -2,7 +2,7 @@ import { MarkdownRenderer } from "obsidian";
 import { CloakfetchClient, type ExpandedKnowledge } from "../services/CloakfetchClient";
 import { KnowledgeService } from "../services/KnowledgeService";
 import { createHomeDb, type LearningRecord } from "../storage/homeDb";
-import type { WorktableSettings } from "../settings";
+import { hasDirectAiConfig, type WorktableSettings } from "../settings";
 import type { WidgetContext } from "../types";
 import { parsePastedArticle } from "./parsePastedArticle";
 
@@ -54,6 +54,19 @@ export function mountLearningWidget(containerEl: HTMLElement, context: WidgetCon
   const heading = root.createEl("h3");
   heading.createSpan({ text: "🌱 学习模块" });
   const statusEl = heading.createSpan({ cls: "learn-status", text: "空闲" });
+
+  // Onboarding banner: tell users upfront whether they can use the widget
+  // without a local Cloakfetch service. Direct AI = no service needed.
+  // Otherwise, hint at the paste-text path which is also service-free.
+  const aiBanner = root.createDiv({
+    cls: `home-learn-banner ${hasDirectAiConfig(context.settings as WorktableSettings) ? "active" : "inactive"}`,
+  });
+  if (hasDirectAiConfig(context.settings as WorktableSettings)) {
+    const model = (context.settings as WorktableSettings).aiModel.trim();
+    aiBanner.setText(`⚡ 直连 AI 已启用${model ? `（${model}）` : ""} — 学习功能无需启动本地服务`);
+  } else {
+    aiBanner.setText("💡 粘贴正文可跳过本地服务;或在设置中填写 API 密钥启用直连 AI →");
+  }
 
   const fetchSection = section(root, "① 输入文章内容");
   const fetchRow = fetchSection.createDiv({ cls: "learn-row" });

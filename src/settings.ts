@@ -1,9 +1,11 @@
 import { App, moment, PluginSettingTab, Setting } from "obsidian";
 import type ObsidianWorktablePlugin from "./main";
+import { AI_PROVIDERS } from "./services/ai/registry";
+import type { AiProviderId } from "./services/ai/types";
 import { getSettingsStrings } from "./settingsStrings";
 import { renderServiceSetup } from "./settingsServiceSetup";
 
-export type AiProvider = "anthropic";
+export type AiProvider = AiProviderId;
 
 export interface WorktableSettings {
   knowledgeFile: string;
@@ -93,6 +95,89 @@ export class WorktableSettingTab extends PluginSettingTab {
           })
       );
 
+    // Direct AI is intentionally surfaced before the local Cloakfetch service
+    // section so first-time users see that they can use AI features without
+    // running any local server. The Learning widget shows a matching banner
+    // that flips between "active" and "inactive" depending on this config.
+    containerEl.createEl("h3", { text: t.directAiSection });
+    containerEl.createEl("p", {
+      cls: "setting-item-description",
+      text: t.directAiIntro,
+    });
+
+    const activeSpec = AI_PROVIDERS[this.plugin.settings.aiProvider] ?? AI_PROVIDERS.anthropic;
+
+    new Setting(containerEl)
+      .setName(t.aiProviderName)
+      .setDesc(t.aiProviderDesc)
+      .addDropdown((dropdown) => {
+        for (const spec of Object.values(AI_PROVIDERS)) {
+          dropdown.addOption(spec.id, spec.displayName);
+        }
+        dropdown
+          .setValue(this.plugin.settings.aiProvider)
+          .onChange(async (value) => {
+            const next = (value as AiProvider) in AI_PROVIDERS ? (value as AiProvider) : "anthropic";
+            this.plugin.settings.aiProvider = next;
+            // Auto-populate baseUrl and model with the new provider's defaults
+            // so a one-click swap is enough for the common case. The user can
+            // still override either field afterwards.
+            const spec = AI_PROVIDERS[next];
+            this.plugin.settings.aiBaseUrl = spec.defaultBaseUrl;
+            this.plugin.settings.aiModel = spec.defaultModel;
+            await this.plugin.saveSettings();
+            this.display();
+          });
+      });
+
+    new Setting(containerEl)
+      .setName(t.aiApiKeyName)
+      .setDesc(t.aiApiKeyDesc)
+      .addText((text) => {
+        text
+          .setPlaceholder("sk-...")
+          .setValue(this.plugin.settings.aiApiKey)
+          .onChange(async (value) => {
+            this.plugin.settings.aiApiKey = value;
+            await this.plugin.saveSettings();
+          });
+        text.inputEl.type = "password";
+        text.inputEl.autocomplete = "off";
+      });
+
+    new Setting(containerEl)
+      .setName(t.aiBaseUrlName)
+      .setDesc(t.aiBaseUrlDesc)
+      .addText((text) =>
+        text
+          .setPlaceholder(activeSpec.defaultBaseUrl)
+          .setValue(this.plugin.settings.aiBaseUrl)
+          .onChange(async (value) => {
+            this.plugin.settings.aiBaseUrl = value.trim() || activeSpec.defaultBaseUrl;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName(t.aiModelName)
+      .setDesc(t.aiModelDesc)
+      .addText((text) =>
+        text
+          .setPlaceholder(activeSpec.modelPlaceholder)
+          .setValue(this.plugin.settings.aiModel)
+          .onChange(async (value) => {
+            this.plugin.settings.aiModel = value.trim() || activeSpec.defaultModel;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    const aiStatus = containerEl.createDiv({ cls: "worktable-ai-status" });
+    aiStatus.setText(
+      hasDirectAiConfig(this.plugin.settings)
+        ? t.aiStatusActive(this.plugin.settings.aiModel)
+        : t.aiStatusInactive,
+    );
+
     containerEl.createEl("h3", { text: t.serviceSection });
 
     new Setting(containerEl)
@@ -147,72 +232,5 @@ export class WorktableSettingTab extends PluginSettingTab {
       );
 
     renderServiceSetup(containerEl, this.plugin, t);
-
-    containerEl.createEl("h3", { text: t.directAiSection });
-    containerEl.createEl("p", {
-      cls: "setting-item-description",
-      text: t.directAiIntro,
-    });
-
-    new Setting(containerEl)
-      .setName(t.aiProviderName)
-      .setDesc(t.aiProviderDesc)
-      .addDropdown((dropdown) =>
-        dropdown
-          .addOption("anthropic", t.aiProviderOption)
-          .setValue(this.plugin.settings.aiProvider)
-          .onChange(async (value) => {
-            this.plugin.settings.aiProvider = (value as AiProvider) || "anthropic";
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(containerEl)
-      .setName(t.aiApiKeyName)
-      .setDesc(t.aiApiKeyDesc)
-      .addText((text) => {
-        text
-          .setPlaceholder("sk-ant-...")
-          .setValue(this.plugin.settings.aiApiKey)
-          .onChange(async (value) => {
-            this.plugin.settings.aiApiKey = value;
-            await this.plugin.saveSettings();
-          });
-        text.inputEl.type = "password";
-        text.inputEl.autocomplete = "off";
-      });
-
-    new Setting(containerEl)
-      .setName(t.aiBaseUrlName)
-      .setDesc(t.aiBaseUrlDesc)
-      .addText((text) =>
-        text
-          .setPlaceholder("https://api.anthropic.com")
-          .setValue(this.plugin.settings.aiBaseUrl)
-          .onChange(async (value) => {
-            this.plugin.settings.aiBaseUrl = value.trim() || DEFAULT_SETTINGS.aiBaseUrl;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(containerEl)
-      .setName(t.aiModelName)
-      .setDesc(t.aiModelDesc)
-      .addText((text) =>
-        text
-          .setPlaceholder("claude-sonnet-4-5")
-          .setValue(this.plugin.settings.aiModel)
-          .onChange(async (value) => {
-            this.plugin.settings.aiModel = value.trim() || DEFAULT_SETTINGS.aiModel;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    const aiStatus = containerEl.createDiv({ cls: "worktable-ai-status" });
-    aiStatus.setText(
-      hasDirectAiConfig(this.plugin.settings)
-        ? t.aiStatusActive(this.plugin.settings.aiModel)
-        : t.aiStatusInactive,
-    );
   }
 }

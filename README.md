@@ -96,14 +96,30 @@ npm run verify
 | Service token（可选） | `""` | 高级覆盖项。**默认留空**——插件会自动从 `~/.config/obsidian-worktable/server.json` 读取（运行 `install-macos.sh` 后会写入）。仅在需要绕过该配置文件时填写。 |
 | Open on startup | ✅ | 启动 Obsidian 时自动打开 Worktable 视图 |
 | Enable fallback proxies | ✅ | 学习模块抓取失败时回退到公共 CORS 代理 |
-| Provider | `anthropic` | AI 提供方，目前仅支持 Anthropic Messages API |
-| API key | `""` | Anthropic API key（`sk-ant-...`），直接调用 Anthropic 时使用 |
-| Base URL | `https://api.anthropic.com` | Anthropic 兼容端点（官方 / 代理 / MiniMax 等） |
-| Model | `claude-sonnet-4-5` | 模型 ID |
+| Provider | `anthropic` | AI 提供方，默认 `anthropic`（Claude Messages API） |
+| API key | `""` | 所选服务商的 API key |
+| Base URL | `https://api.anthropic.com` | 默认随服务商切换自动填入；可手动改为代理 / 私有部署 |
+| Model | `claude-sonnet-4-5` | 默认随服务商切换自动填入；可手动覆盖 |
 
 #### Direct AI 配置（可选）
 
-当 **API key + Base URL + Model** 三项都填写时，插件会**直接调用 Anthropic Messages API**，完全绕过本地 Cloakfetch 服务进行 AI 调用（出题、提取重点、整理知识点）。此时 `Service base URL` 仅用于 `/fetch` 抓取网页。
+当 **API key + Base URL + Model** 三项都填写时，插件会**直接调用所选服务商的 AI 接口**，完全绕过本地 Cloakfetch 服务进行 AI 调用（出题、提取重点、整理知识点）。此时 `Service base URL` 仅用于 `/fetch` 抓取网页。
+
+#### 支持的 AI 服务商
+
+| 服务商 | 默认 Base URL | 默认 Model |
+|--------|---------------|-----------|
+| Anthropic (Claude) | `https://api.anthropic.com` | `claude-sonnet-4-5` |
+| OpenAI (GPT) | `https://api.openai.com/v1` | `gpt-4o-mini` |
+| Google Gemini | `https://generativelanguage.googleapis.com/v1beta` | `gemini-2.0-flash` |
+| DeepSeek | `https://api.deepseek.com/v1` | `deepseek-chat` |
+| Moonshot (Kimi) | `https://api.moonshot.cn/v1` | `moonshot-v1-8k` |
+| Zhipu (GLM) | `https://open.bigmodel.cn/api/paas/v4` | `glm-4-flash` |
+| Alibaba Bailian (Qwen) | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `qwen-plus` |
+| Volcengine (Doubao) | `https://ark.cn-beijing.volces.com/api/v3` | `doubao-1-5-pro-32k-250115` |
+| MiniMax | `https://api.minimaxi.com/anthropic` | `MiniMax-M3` |
+
+切换服务商时，`Base URL` 和 `Model` 会自动填入该服务商的默认值，之后可手动覆盖。任何 OpenAI Chat Completions 兼容的端点都可以通过选择 `OpenAI` 并修改 `Base URL` 来使用。
 
 当任一项留空时，AI 调用会回退到本地服务的 `/ai/*` 端点（依赖 Cloakfetch 服务配置 `aiAuthToken` / `aiBaseUrl` / `aiModel`）。
 
