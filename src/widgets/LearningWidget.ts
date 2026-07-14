@@ -4,6 +4,7 @@ import { KnowledgeService } from "../services/KnowledgeService";
 import { createHomeDb, type LearningRecord } from "../storage/homeDb";
 import type { WorktableSettings } from "../settings";
 import type { WidgetContext } from "../types";
+import { parsePastedArticle } from "./parsePastedArticle";
 
 type QuestionType = "mc" | "cloze" | "tf" | "short";
 
@@ -29,7 +30,7 @@ interface LearningState {
 
 interface LearningSettings {
   knowledgeFile?: unknown;
-  enablePublicFetchFallbacks?: unknown;
+  enableFallbackProxies?: unknown;
 }
 
 const KNOWLEDGE_CACHE_KEY = "home-knowledge-cache-v1";
@@ -54,13 +55,22 @@ export function mountLearningWidget(containerEl: HTMLElement, context: WidgetCon
   heading.createSpan({ text: "🌱 学习模块" });
   const statusEl = heading.createSpan({ cls: "learn-status", text: "空闲" });
 
-  const fetchSection = section(root, "① 输入网址 → 抓取内容");
+  const fetchSection = section(root, "① 输入文章内容");
   const fetchRow = fetchSection.createDiv({ cls: "learn-row" });
-  const urlInput = fetchRow.createEl("input", { type: "url", placeholder: "https://example.com/article" });
+  const urlInput = fetchRow.createEl("input", { type: "url", placeholder: "https://example.com/article（可选 — 需要本地服务）" });
   const fetchButton = button(fetchRow, "📥 抓取");
   const diagnoseButton = button(fetchRow, "🔍 诊断", "secondary");
   const diagnostics = fetchSection.createEl("pre", { cls: "learn-diagnostics" });
   diagnostics.hidden = true;
+
+  const pasteSeparator = fetchSection.createDiv({ cls: "learn-divider", text: "— 或直接粘贴正文 —" });
+  const pasteTextarea = fetchSection.createEl("textarea", {
+    cls: "learn-paste-textarea",
+    attr: { placeholder: "复制文章正文粘贴到这里，无需任何本地服务即可让 AI 处理", rows: "6" },
+  });
+  const pasteRow = fetchSection.createDiv({ cls: "learn-row" });
+  const pasteButton = button(pasteRow, "📋 处理粘贴文本", "secondary");
+  const pasteClearButton = button(pasteRow, "清空", "secondary compact");
 
   const articleSection = section(root, "② 原文与 AI 出题/重点");
   articleSection.hidden = true;
@@ -147,6 +157,13 @@ export function mountLearningWidget(containerEl: HTMLElement, context: WidgetCon
   listen(diagnoseButton, "click", () => {
     void runDiagnostics();
   });
+  listen(pasteButton, "click", () => {
+    void runPaste();
+  });
+  listen(pasteClearButton, "click", () => {
+    pasteTextarea.value = "";
+    pasteTextarea.focus();
+  });
   listen(generateButton, "click", () => {
     void generateQuestions();
   });
@@ -190,8 +207,7 @@ export function mountLearningWidget(containerEl: HTMLElement, context: WidgetCon
     fetchButton.disabled = true;
     setStatus("抓取中…");
     try {
-      const html = await fetchArticle(client, url, settings.enablePublicFetchFallbacks === true);
-      const article = htmlToArticle(html);
+      const article = await fetchArticle(client, url, settings.enableFallbackProxies === true);
       if (article.text.length < 50) throw new Error("正文太短或无法提取");
       if (disposed) return;
       state.url = url;
@@ -204,6 +220,11 @@ export function mountLearningWidget(containerEl: HTMLElement, context: WidgetCon
       setStatus(`已抓取 · ${article.text.length} 字`, "ok");
     } catch (error) {
       showError(error, "抓取失败");
+      // Surface a hint that paste-text is the zero-install alternative.
+      diagnostics.hidden = false;
+      diagnostics.setText(
+        `${diagnostics.textContent ?? ""}\n\n提示:抓取失败时,直接粘贴正文到下方文本框,无需任何本地服务。`.trim(),
+      );
     } finally {
       fetchButton.disabled = false;
     }
@@ -220,6 +241,41 @@ export function mountLearningWidget(containerEl: HTMLElement, context: WidgetCon
       if (!disposed) diagnostics.setText(`诊断失败：${errorMessage(error)}`);
     } finally {
       diagnoseButton.disabled = false;
+    }
+  }
+
+  /**
+   * Skip Cloakfetch entirely: take whatever the user pasted, normalize whitespace,
+   * optionally lift a title from the first non-empty line, and feed the body
+   * straight to the AI handlers. This makes the Learning widget fully usable
+   * on machines without the local service (including Obsidian Mobile).
+   */
+  async function runPaste(): Promise<void> {
+    const raw = pasteTextarea.value;
+    if (!raw.trim()) {
+      setStatus("粘贴框为空", "err");
+      pasteTextarea.focus();
+      return;
+    }
+    pasteButton.disabled = true;
+    pasteClearButton.disabled = true;
+    try {
+      const { title, text } = parsePastedArticle(raw);
+      if (text.length < 50) throw new Error("正文太短（至少 50 字）");
+      if (disposed) return;
+      state.url = "(粘贴)";
+      state.title = title || "粘贴的文章";
+      state.article = text;
+      articleContext.setText(`${text.slice(0, 600)}${text.length > 600 ? "…" : ""}`);
+      articleSection.hidden = false;
+      questionSection.hidden = true;
+      resultSection.hidden = true;
+      setStatus(`已就绪 · ${text.length} 字`, "ok");
+    } catch (error) {
+      showError(error, "处理失败");
+    } finally {
+      pasteButton.disabled = false;
+      pasteClearButton.disabled = false;
     }
   }
 
@@ -659,17 +715,45 @@ function button(parent: HTMLElement, text: string, className = ""): HTMLButtonEl
   return parent.createEl("button", { text, cls: className });
 }
 
-async function fetchArticle(client: CloakfetchClient, url: string, allowPublicFallbacks: boolean): Promise<string> {
+/**
+ * Fetch the article body for a given URL.
+ *
+ * Order of attempts:
+ *   1. Local Cloakfetch service (`/fetch`). When present, prefers the
+ *      server-extracted Markdown so the AI prompt stays clean.
+ *   2. Public CORS proxies (`api.allorigins.win`, `corsproxy.io`) when the
+ *      user has `enableFallbackProxies` set.
+ *
+ * Returns the cleaned article text + title. The raw HTML is also returned
+ * so callers can keep it on `state.article` for diagnostics or fallback.
+ */
+async function fetchArticle(
+  client: CloakfetchClient,
+  url: string,
+  allowPublicFallbacks: boolean,
+): Promise<{ title: string; text: string; html: string }> {
+  // 1) Local service
   try {
     const res = await client.fetchUrl(url);
-    if (res && typeof res === "object" && "html" in res && typeof (res as { html?: unknown }).html === "string") {
-      return (res as { html: string }).html;
+    if (res && typeof res === "object" && res.ok) {
+      const html = typeof res.html === "string" ? res.html : "";
+      const serverTitle = typeof res.title === "string" ? res.title : "";
+      // Prefer server-extracted markdown when present (Cloakfetch v0.2.4+).
+      if (typeof res.markdown === "string" && res.markdown.trim().length >= 50) {
+        return { title: serverTitle, text: res.markdown.trim().slice(0, 6_000), html };
+      }
+      // Fallback: client-side HTML→text extraction.
+      if (html.length >= 50) {
+        const article = htmlToArticle(html);
+        return { title: serverTitle || article.title, text: article.text, html };
+      }
     }
     throw new Error("Fetch returned no HTML");
   } catch (localError) {
     if (!allowPublicFallbacks) throw localError;
   }
 
+  // 2) Public CORS proxies — return raw HTML; client extracts text.
   const attempts = [
     `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
     `https://corsproxy.io/?${encodeURIComponent(url)}`,
@@ -682,15 +766,17 @@ async function fetchArticle(client: CloakfetchClient, url: string, allowPublicFa
       const response = await fetch(attempt, { signal: controller.signal });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const contentType = response.headers.get("content-type") ?? "";
+      let html = "";
       if (contentType.includes("application/json")) {
         const payload = await response.json() as { contents?: unknown; data?: unknown };
-        const html = typeof payload.contents === "string" ? payload.contents : payload.data;
-        if (typeof html === "string" && html.length >= 50) return html;
+        const candidate = typeof payload.contents === "string" ? payload.contents : payload.data;
+        if (typeof candidate === "string") html = candidate;
       } else {
-        const html = await response.text();
-        if (html.length >= 50) return html;
+        html = await response.text();
       }
-      throw new Error("返回内容为空");
+      if (html.length < 50) throw new Error("返回内容为空");
+      const article = htmlToArticle(html);
+      return { title: article.title, text: article.text, html };
     } catch (error) {
       errors.push(errorMessage(error));
     } finally {
@@ -711,6 +797,9 @@ function htmlToArticle(html: string): { title: string; text: string } {
   return { title, text };
 }
 
+/** Normalize a pasted article body. Lifts a probable title from the first
+ * non-empty line if it's short enough (<= 120 chars and doesn't end with
+ * sentence punctuation), then collapses whitespace and trims. */
 function normalizeQuestions(value: unknown): Question[] {
   const candidates = Array.isArray(value) ? value : [];
   return candidates.flatMap((candidate): Question[] => {

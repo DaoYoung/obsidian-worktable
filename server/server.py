@@ -6,7 +6,7 @@ Cloudflare, FingerprintJS, etc. that block public CORS proxies).
 
 Endpoints:
   GET  /health                       → JSON {ok, browserReady, uptimeSec, cacheSize, cacheMax}
-  GET  /fetch?url=<URL>              → JSON {ok, url, title, html, length, elapsedMs, cacheHit}
+  GET  /fetch?url=<URL>              → JSON {ok, url, title, html, markdown, length, elapsedMs, cacheHit}
   POST /ai/questions                 → JSON {title, text, count<=3} → AI quiz (mc/cloze/tf/short)
   POST /ai/extract                   → JSON {title, text, maxPoints<=10} → key points list
   POST /ai/expand                    → JSON {name, context?} → {subject, translation, pos, markdown}
@@ -293,7 +293,23 @@ def _do_fetch(url: str, timeout: int) -> dict:
         page.goto(url, wait_until="domcontentloaded", timeout=timeout * 1000)
         title = page.title() or ""
         html = page.content() or ""
+        # Lazy import keeps startup fast and the dependency optional — the
+        # /fetch endpoint still works without trafilatura (just no markdown
+        # extraction; the client falls back to htmlToArticle).
+        markdown = ""
+        try:
+            import trafilatura  # type: ignore
+            markdown = trafilatura.extract(
+                html,
+                include_comments=False,
+                include_tables=True,
+                output_format="markdown",
+                favor_recall=True,
+            ) or ""
+        except Exception as e:
+            LOG.warning("trafilatura extract failed: %s", e)
         return {"ok": True, "url": url, "title": title, "html": html,
+                "markdown": markdown,
                 "length": len(html), "cacheHit": False, "elapsedMs": 0}
     finally:
         try:

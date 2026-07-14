@@ -167,6 +167,45 @@ describe("CloakfetchClient - expand", () => {
   });
 });
 
+describe("CloakfetchClient - fetch", () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("preserves server-extracted markdown and title in the fetch response", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({
+      ok: true,
+      title: "Why Birds Migrate",
+      html: "<html><body><h1>Why Birds Migrate</h1><p>long article…</p></body></html>",
+      markdown: "# Why Birds Migrate\n\nBirds migrate every year…",
+    }));
+    const client = new CloakfetchClient(baseSettings);
+    const res = await client.fetchUrl("https://example.com/birds");
+    expect(res.ok).toBe(true);
+    expect(res.title).toBe("Why Birds Migrate");
+    expect(res.markdown).toContain("# Why Birds Migrate");
+    expect(res.html).toContain("<h1>");
+  });
+
+  it("accepts a fetch response with no markdown field (older server)", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({
+      ok: true,
+      title: "Old",
+      html: "<html></html>",
+    }));
+    const client = new CloakfetchClient(baseSettings);
+    const res = await client.fetchUrl("https://example.com/old");
+    expect(res.ok).toBe(true);
+    expect(res.title).toBe("Old");
+    expect(res.markdown).toBeUndefined();
+  });
+});
+
 describe("CloakfetchClient - direct AI routing", () => {
   const fetchMock = vi.fn();
   beforeEach(() => {

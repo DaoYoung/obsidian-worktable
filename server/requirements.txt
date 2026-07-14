@@ -1,1 +1,2 @@
 cloakbrowser==0.4.10
+trafilatura>=1.6.0,<3.0

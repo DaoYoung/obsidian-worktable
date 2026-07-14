@@ -1,6 +1,6 @@
 /* ===========================================================================
    Obsidian Worktable — Built Styles
-   Generated: 2026-07-13T16-05-37
+   Generated: 2026-07-14T02-40-48
    Sources:
  *  - src/styles/base.css
  *  - src/styles/productivity.css
@@ -1506,6 +1506,38 @@
   word-break: break-all;
   max-height: 200px;
   overflow-y: auto;
+}
+
+.obsidian-worktable .learn-divider {
+  margin: 12px 0 6px 0;
+  font-size: 11px;
+  color: var(--text-muted, #888);
+  text-align: center;
+  letter-spacing: 0.5px;
+}
+
+.obsidian-worktable .learn-paste-textarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  resize: vertical;
+  background: var(--background-primary, #fff);
+  color: var(--text-normal, #333);
+  border: 1px solid var(--background-modifier-border, #ddd);
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+
+.obsidian-worktable .learn-paste-textarea:focus {
+  border-color: var(--interactive-accent, #7f6df2);
+  outline: none;
+}
+
+.obsidian-worktable .learn-paste-textarea::placeholder {
+  color: var(--text-faint, #aaa);
 }
 
 .obsidian-worktable .home-learning {

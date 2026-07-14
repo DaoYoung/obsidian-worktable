@@ -5,6 +5,45 @@ All notable changes to Obsidian Worktable will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.4] - 2026-07-14
+
+### Fixed
+
+- **Learning widget**: the `enablePublicFetchFallbacks` setting was a dead
+  field — the widget read a name that did not exist on `WorktableSettings`.
+  Renamed the interface field to `enableFallbackProxies` (the actual key) so
+  public CORS proxies (`api.allorigins.win`, `corsproxy.io`) now actually
+  get used as a fallback when the local Cloakfetch service is unavailable.
+  Regression test added in `tests/cloakfetch.test.ts`.
+
+### Changed
+
+- **Learning widget: Cloakfetch is now optional.** A new "📋 Process
+  pasted text" entry sits beside the URL fetch — paste any article body,
+  the widget lifts a probable title from the first line, and the rest goes
+  straight to the AI handlers with no local service required. This makes
+  the Learning widget fully usable on **Obsidian Mobile** (no CloakBrowser,
+  no local server). If fetch fails, the widget now surfaces a hint
+  pointing at the paste fallback.
+- Extracted the paste-parsing logic into `src/widgets/parsePastedArticle.ts`
+  with 11 unit tests covering short/long titles, CJK punctuation, empty
+  input, whitespace collapse, and the 6,000-char trim cap.
+
+### Added
+
+- **Server-side article extraction**: Cloakfetch now uses
+  [`trafilatura`](https://trafilatura.readthedocs.io/) inside `_do_fetch()`
+  to clean page HTML → Markdown before sending it back to the plugin. This
+  removes nav / ads / scripts at the source so AI prompts stay short and
+  focused. The new `markdown` field is preferred over `html` in
+  `LearningWidget.fetchArticle()` when present; old clients and servers
+  stay compatible (graceful fallback to client-side `htmlToArticle`).
+- `trafilatura>=1.6.0,<3.0` added to `server/requirements.txt` — 1 MB
+  Python lib, no LLM calls, no extra runtime cost beyond the one-time
+  extract per fetch.
+- 3 new server tests (`TestTrafilaturaExtraction`) covering success,
+  missing-library, and runtime-error paths.
+
 ## [0.2.3] - 2026-07-14
 
 ### Changed

@@ -541,6 +541,77 @@ class TestCORSheaders(unittest.TestCase):
         self.assertIn("POST", server.CORS["Access-Control-Allow-Methods"])
 
 
+class TestTrafilaturaExtraction(unittest.TestCase):
+    """_do_fetch should use trafilatura to clean HTML into markdown."""
+
+    def _fake_browser(self):
+        """Build a fake browser whose page returns canned HTML."""
+        page = MagicMock()
+        page.title.return_value = "Sample Article"
+        page.content.return_value = (
+            "<html><body><nav>menu</nav>"
+            "<article><h1>Sample Article</h1>"
+            "<p>This is the body of the article with enough text to be interesting.</p>"
+            "<p>Another paragraph with more content.</p>"
+            "</article>"
+            "<footer>footer noise</footer></body></html>"
+        )
+        browser = MagicMock()
+        browser.new_page.return_value = page
+        return browser
+
+    def test_markdown_field_present_when_trafilatura_succeeds(self):
+        """When trafilatura is importable and returns text, the result dict has 'markdown'."""
+        fake_trafilatura = MagicMock()
+        fake_trafilatura.extract.return_value = "# Sample Article\n\nClean body text."
+
+        with patch.object(server, "_get_browser", return_value=self._fake_browser()), \
+             patch.dict("sys.modules", {"trafilatura": fake_trafilatura}):
+            result = server._do_fetch("https://example.com/article", 30)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["title"], "Sample Article")
+        self.assertIn("markdown", result)
+        self.assertIn("Clean body text", result["markdown"])
+        # trafilatura must have been called with the page HTML.
+        fake_trafilatura.extract.assert_called_once()
+        call_kwargs = fake_trafilatura.extract.call_args.kwargs
+        self.assertEqual(call_kwargs.get("output_format"), "markdown")
+        self.assertTrue(call_kwargs.get("favor_recall"))
+
+    def test_markdown_empty_when_trafilatura_missing(self):
+        """When trafilatura is not installed, markdown stays empty (no crash)."""
+        # Make `import trafilatura` raise ImportError inside _do_fetch.
+        import builtins
+        original_import = builtins.__import__
+
+        def fake_import(name, *args, **kwargs):
+            if name == "trafilatura":
+                raise ImportError("trafilatura not installed")
+            return original_import(name, *args, **kwargs)
+
+        with patch.object(server, "_get_browser", return_value=self._fake_browser()), \
+             patch.object(builtins, "__import__", side_effect=fake_import):
+            result = server._do_fetch("https://example.com/article", 30)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["markdown"], "")
+        # HTML is still returned so the client can fall back to client-side extraction.
+        self.assertIn("<article>", result["html"])
+
+    def test_markdown_empty_when_trafilatura_raises(self):
+        """When trafilatura raises inside extract(), markdown stays empty."""
+        fake_trafilatura = MagicMock()
+        fake_trafilatura.extract.side_effect = RuntimeError("boom")
+
+        with patch.object(server, "_get_browser", return_value=self._fake_browser()), \
+             patch.dict("sys.modules", {"trafilatura": fake_trafilatura}):
+            result = server._do_fetch("https://example.com/article", 30)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["markdown"], "")
+
+
 class TestCORSExposure(unittest.TestCase):
     """Verify CORS headers are sent on responses."""
 

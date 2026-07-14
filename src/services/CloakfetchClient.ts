@@ -44,7 +44,13 @@ export interface ExpandedKnowledge {
 
 export interface CloakfetchFetchResponse {
   ok: boolean;
+  /** Page title as reported by the browser (server-side via page.title()). */
+  title?: string;
   html?: string;
+  /** Cleaned Markdown extracted server-side via trafilatura. Prefer this over
+   * `html` for AI prompts — it's already stripped of nav/ads/scripts. May be
+   * empty if the server doesn't have trafilatura or extraction failed. */
+  markdown?: string;
   error?: string;
 }
 
