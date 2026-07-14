@@ -1,6 +1,6 @@
 /* ===========================================================================
    Obsidian Worktable — Built Styles
-   Generated: 2026-07-14T02-40-48
+   Generated: 2026-07-14T07-09-11
    Sources:
  *  - src/styles/base.css
  *  - src/styles/productivity.css
@@ -2035,4 +2035,30 @@
 
 .obsidian-worktable .home-review-foot-actions button:hover {
   background: var(--background-modifier-hover, #ececec);
+}
+
+/* Onboarding banner shown at the top of the Learning widget so users
+ * immediately know whether the widget works without a local Cloakfetch
+ * service. Active (greenish) = direct AI is configured. Inactive (muted)
+ * = service-only path; the banner points at the paste-text fallback and
+ * the settings panel. */
+.obsidian-worktable .home-learn-banner {
+  margin: 6px 0 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  border: 1px solid transparent;
+}
+
+.obsidian-worktable .home-learn-banner.active {
+  background: var(--background-modifier-success, rgba(46, 160, 67, 0.12));
+  border-color: var(--background-modifier-success-hover, rgba(46, 160, 67, 0.35));
+  color: var(--text-normal, #1a1a1a);
+}
+
+.obsidian-worktable .home-learn-banner.inactive {
+  background: var(--background-secondary, #f6f6f6);
+  border-color: var(--background-modifier-border, #d8d8d8);
+  color: var(--text-muted, #666);
 }

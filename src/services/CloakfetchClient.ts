@@ -124,6 +124,7 @@ export class CloakfetchClient {
   private get directAi(): DirectAiClient | null {
     if (!hasDirectAiConfig(this.settings)) return null;
     return new DirectAiClient({
+      provider: this.settings.aiProvider,
       apiKey: this.settings.aiApiKey.trim(),
       baseUrl: this.settings.aiBaseUrl.trim(),
       model: this.settings.aiModel.trim(),

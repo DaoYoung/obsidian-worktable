@@ -3,6 +3,8 @@ import {
   type CloakfetchQuestion,
   type ExpandedKnowledge,
 } from "./CloakfetchClient";
+import { AiClient } from "./ai/client";
+import type { AiProviderId } from "./ai/types";
 import {
   knowledgeExpandPrompt,
   keyPointsExtractionPrompt,
@@ -11,6 +13,7 @@ import {
 } from "./aiPrompts";
 
 export interface DirectAiConfig {
+  provider: AiProviderId;
   apiKey: string;
   baseUrl: string;
   model: string;
@@ -18,177 +21,56 @@ export interface DirectAiConfig {
   timeoutMs?: number;
 }
 
-interface AnthropicMessagesResponse {
-  content?: Array<{ type?: string; text?: string }>;
-  error?: { message?: string };
-}
-
-const DEFAULT_TIMEOUT_MS = 60_000;
-
 /**
- * Direct Anthropic Messages API client used by CloakfetchClient when the user
- * has filled in direct AI settings (provider/apiKey/baseUrl/model). Mirrors
- * the server-side AI endpoints so callers (LearningWidget) keep working
- * unchanged regardless of whether the request is routed to the local service
- * or handled here.
+ * Thin wrapper over `AiClient` that preserves the three prompts the rest of
+ * the plugin expects (`generateQuestions` / `extractKeyPoints` /
+ * `expandKnowledge`) and the post-processing that turns raw model output
+ * into the strongly-typed shapes the UI consumes.
+ *
+ * The transport — picking the right URL, headers, and body shape for each
+ * provider — lives in `src/services/ai/`.
  */
 export class DirectAiClient {
-  private readonly config: DirectAiConfig;
+  private readonly client: AiClient;
 
   constructor(config: DirectAiConfig) {
-    this.config = {
-      timeoutMs: DEFAULT_TIMEOUT_MS,
-      ...config,
-    };
+    this.client = new AiClient(config);
   }
 
   get model(): string {
-    return this.config.model;
+    return this.client.model;
+  }
+
+  get provider(): AiProviderId {
+    return this.client.providerId;
   }
 
   get baseUrl(): string {
-    return this.config.baseUrl.replace(/\/+$/, "");
+    return this.client.provider.defaultBaseUrl;
   }
 
   async generateQuestions(title: string, text: string, count = 3): Promise<CloakfetchQuestion[]> {
     const { system, user } = questionGenerationPrompt(title, text, count);
-    const raw = await this.callAnthropic(system, user, 2048, this.config.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+    const raw = await this.client.call(system, user, 2048);
     const parsed = parseQuestionsResponse(raw);
     return sanitizeQuestions(parsed, count);
   }
 
   async extractKeyPoints(title: string, text: string, maxPoints = 8): Promise<string[]> {
     const { system, user } = keyPointsExtractionPrompt(title, text, maxPoints);
-    const raw = await this.callAnthropic(system, user, 1024, this.config.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+    const raw = await this.client.call(system, user, 1024);
     return parseKeyPointsResponse(raw, maxPoints);
   }
 
   async expandKnowledge(name: string, context = ""): Promise<ExpandedKnowledge> {
     const { system, user } = knowledgeExpandPrompt(name, context);
-    const raw = await this.callAnthropic(system, user, 1800, this.config.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+    const raw = await this.client.call(system, user, 1800);
     return parseExpandedResponse(name, raw);
   }
 
-  /**
-   * Lightweight health check. Sends a 1-token ping against the configured
-   * endpoint. Returns true on 2xx, false otherwise.
-   */
   async ping(): Promise<boolean> {
-    if (!this.config.apiKey.trim()) return false;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 8_000);
-    try {
-      const res = await fetch(`${this.baseUrl}/v1/messages`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-api-key": this.config.apiKey,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true",
-        },
-        body: JSON.stringify({
-          model: this.config.model,
-          max_tokens: 1,
-          messages: [{ role: "user", content: "ping" }],
-        }),
-        signal: controller.signal,
-      });
-      return res.ok;
-    } catch (_err) {
-      return false;
-    } finally {
-      clearTimeout(timer);
-    }
+    return this.client.ping();
   }
-
-  private async callAnthropic(system: string, user: string, maxTokens: number, timeoutMs: number): Promise<string> {
-    if (!this.config.apiKey.trim()) {
-      throw new CloakfetchError("Direct AI is not configured (apiKey is empty)", {
-        status: 0,
-        body: "",
-        endpoint: `${this.baseUrl}/v1/messages`,
-      });
-    }
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      const res = await fetch(`${this.baseUrl}/v1/messages`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-api-key": this.config.apiKey,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true",
-        },
-        body: JSON.stringify({
-          model: this.config.model,
-          max_tokens: maxTokens,
-          system,
-          messages: [{ role: "user", content: user }],
-        }),
-        signal: controller.signal,
-      });
-      const text = await res.text();
-      if (!res.ok) {
-        const message = extractErrorMessage(text) || `HTTP ${res.status}`;
-        throw new CloakfetchError(message, {
-          status: res.status,
-          body: text.slice(0, 1000),
-          endpoint: "/v1/messages",
-        });
-      }
-      let parsed: AnthropicMessagesResponse | null = null;
-      try {
-        parsed = JSON.parse(text) as AnthropicMessagesResponse;
-      } catch (_err) {
-        throw new CloakfetchError("Invalid JSON from AI provider", {
-          status: res.status,
-          body: text.slice(0, 1000),
-          endpoint: "/v1/messages",
-        });
-      }
-      const content = parsed?.content ?? [];
-      const text0 = content
-        .filter((block) => block && block.type === "text" && typeof block.text === "string")
-        .map((block) => block.text ?? "")
-        .join("");
-      if (!text0) {
-        throw new CloakfetchError("AI provider returned no text content", {
-          status: res.status,
-          body: text.slice(0, 1000),
-          endpoint: "/v1/messages",
-        });
-      }
-      return text0;
-    } catch (err) {
-      if (err instanceof CloakfetchError) throw err;
-      if ((err as { name?: string })?.name === "AbortError") {
-        throw new CloakfetchError(`Direct AI request timed out after ${timeoutMs}ms`, {
-          status: 0,
-          body: "",
-          endpoint: "/v1/messages",
-        });
-      }
-      throw new CloakfetchError(`Direct AI request failed: ${(err as Error).message ?? String(err)}`, {
-        status: 0,
-        body: "",
-        endpoint: "/v1/messages",
-      });
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-}
-
-function extractErrorMessage(text: string): string | null {
-  if (!text) return null;
-  try {
-    const obj = JSON.parse(text) as { error?: { message?: string } };
-    if (obj?.error?.message) return obj.error.message;
-  } catch (_err) {
-    // not JSON
-  }
-  return null;
 }
 
 interface ParsedQuestionsJson {

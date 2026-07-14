@@ -43,7 +43,6 @@ export interface SettingsStrings {
   directAiIntro: string;
   aiProviderName: string;
   aiProviderDesc: string;
-  aiProviderOption: string;
   aiApiKeyName: string;
   aiApiKeyDesc: string;
   aiBaseUrlName: string;
@@ -98,19 +97,19 @@ const en: SettingsStrings = {
   serviceSetupCopied: "Copied!",
   directAiSection: "Direct AI (optional)",
   directAiIntro:
-    "When all three fields below are filled, the plugin calls AI directly through the Anthropic Messages API and does not need the local Cloakfetch service for AI features. Leave blank to keep using the local service.",
+    "When all three fields below are filled, the plugin calls AI directly and does not need the local Cloakfetch service for AI features. Leave blank to keep using the local service.",
   aiProviderName: "Provider",
-  aiProviderDesc: "AI provider. Only Anthropic is supported in this release.",
-  aiProviderOption: "Anthropic (Messages API)",
+  aiProviderDesc:
+    "AI provider. The base URL and model below auto-populate with sensible defaults when you switch providers — you can override either field after switching.",
   aiApiKeyName: "API key",
   aiApiKeyDesc:
-    "Anthropic API key (sk-ant-...). Stored in the plugin's data.json like any other setting.",
+    "API key for the selected provider (e.g. sk-ant-..., sk-...). Stored in the plugin's data.json like any other setting.",
   aiBaseUrlName: "Base URL",
   aiBaseUrlDesc:
-    "Anthropic-compatible endpoint. Use https://api.anthropic.com for the official API, or a proxy/MiniMax-compatible URL.",
+    "Endpoint URL. Auto-fills when you switch providers; override to use a proxy, an alternate region, or a self-hosted gateway.",
   aiModelName: "Model",
   aiModelDesc:
-    "Model identifier sent in the API request (e.g. claude-sonnet-4-5).",
+    "Model identifier sent in the API request (e.g. claude-sonnet-4-5, gpt-4o-mini, deepseek-chat). Auto-fills on provider change.",
   aiStatusActive: (model) => `✓ Direct AI active · model = ${model}`,
   aiStatusInactive:
     "Direct AI not configured — using the local Cloakfetch service for AI calls.",
@@ -159,18 +158,19 @@ const zh: SettingsStrings = {
   serviceSetupCopied: "已复制!",
   directAiSection: "直连 AI(可选)",
   directAiIntro:
-    "当下列三项均填写后,插件将通过 Anthropic Messages API 直接调用 AI,不再依赖本地 Cloakfetch 服务。留空则继续使用本地服务。",
+    "当下列三项均填写后,插件将直接调用 AI,不再依赖本地 Cloakfetch 服务。留空则继续使用本地服务。",
   aiProviderName: "服务商",
-  aiProviderDesc: "AI 服务商。当前仅支持 Anthropic。",
-  aiProviderOption: "Anthropic(消息 API)",
+  aiProviderDesc:
+    "AI 服务商。切换服务商时,接入地址和模型会自动填入该服务商的默认值,之后可手动覆盖。",
   aiApiKeyName: "API 密钥",
   aiApiKeyDesc:
-    "Anthropic API 密钥(sk-ant-...)。与其他设置一同保存在插件的 data.json 中。",
+    "所选服务商的 API 密钥(例如 sk-ant-...、sk-...)。与其他设置一同保存在插件的 data.json 中。",
   aiBaseUrlName: "接入地址",
   aiBaseUrlDesc:
-    "兼容 Anthropic 的接口地址。官方请填写 https://api.anthropic.com,也可填写代理或第三方兼容地址。",
+    "接口地址。切换服务商时自动填入默认值,也可改为代理、私有部署或备用区域。",
   aiModelName: "模型",
-  aiModelDesc: "API 请求使用的模型标识(例如 claude-sonnet-4-5)。",
+  aiModelDesc:
+    "API 请求使用的模型标识(例如 claude-sonnet-4-5、gpt-4o-mini、deepseek-chat)。切换服务商时自动填入。",
   aiStatusActive: (model) => `✓ 直连 AI 已启用 · 模型 = ${model}`,
   aiStatusInactive: "未配置直连 AI — AI 调用继续使用本地 Cloakfetch 服务。",
 };
