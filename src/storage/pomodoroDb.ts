@@ -15,9 +15,13 @@ export interface PomConfig {
 }
 
 export interface PomStats {
-  total: number;
   todayCount: number;
-  totalMin: number;
+  todayFocusSec: number;
+  todayBreakSec: number;
+  focusCount: number;
+  focusTotalSec: number;
+  breakTotalSec: number;
+  activeDays: number;
 }
 
 export interface PomDb {
@@ -27,6 +31,8 @@ export interface PomDb {
   stats(): Promise<PomStats>;
   getConfig(): Promise<PomConfig>;
   setConfig(key: keyof PomConfig, value: boolean): Promise<void>;
+  /** Remove sessions that share the same completedAt + type + duration. Keeps the lowest id. */
+  deduplicateSessions(): Promise<void>;
 }
 
 const DB_NAME = "pomodoro-db";
@@ -88,10 +94,35 @@ export function createPomDb(): PomDb {
       req.onsuccess = () => {
         const all = req.result || [];
         const today = new Date().toISOString().slice(0, 10);
+        let todayCount = 0;
+        let todayFocusSec = 0;
+        let todayBreakSec = 0;
+        let focusCount = 0;
+        let focusTotalSec = 0;
+        let breakTotalSec = 0;
+        const dates = new Set<string>();
+        for (const r of all) {
+          if (r.type === "work") {
+            focusCount += 1;
+            focusTotalSec += r.duration || 0;
+            if (r.date === today) {
+              todayCount += 1;
+              todayFocusSec += r.duration || 0;
+            }
+          } else if (r.type === "short" || r.type === "long") {
+            breakTotalSec += r.duration || 0;
+            if (r.date === today) todayBreakSec += r.duration || 0;
+          }
+          if (r.date) dates.add(r.date);
+        }
         resolve({
-          total: all.length,
-          todayCount: all.filter((r) => r.date === today).length,
-          totalMin: Math.round(all.reduce((a, b) => a + (b.duration || 0), 0) / 60),
+          todayCount,
+          todayFocusSec,
+          todayBreakSec,
+          focusCount,
+          focusTotalSec,
+          breakTotalSec,
+          activeDays: dates.size,
         });
       };
       req.onerror = () => reject(req.error);
@@ -124,5 +155,41 @@ export function createPomDb(): PomDb {
     });
   }
 
-  return { open, addSession, recent, stats, getConfig, setConfig };
+  async function deduplicateSessions(): Promise<void> {
+    const db = await open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("sessions", "readwrite");
+      const store = tx.objectStore("sessions");
+      const req = store.getAll();
+      req.onsuccess = () => {
+        const all: PomSession[] = req.result || [];
+        if (all.length < 2) return;
+        // Sort by completedAt ascending so a linear scan finds near-duplicates.
+        all.sort((a, b) => (a.completedAt ?? 0) - (b.completedAt ?? 0) || (a.id ?? 0) - (b.id ?? 0));
+        const toDelete = new Set<number>();
+        let prev: PomSession | null = null;
+        for (const rec of all) {
+          if (rec.id == null) continue;
+          if (
+            prev &&
+            prev.type === rec.type &&
+            prev.duration === rec.duration &&
+            rec.completedAt - prev.completedAt < 5000
+          ) {
+            // Keep the earlier one, mark the later one for deletion.
+            toDelete.add(rec.id);
+          } else {
+            prev = rec;
+          }
+        }
+        for (const id of toDelete) {
+          store.delete(id);
+        }
+      };
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  return { open, addSession, recent, stats, getConfig, setConfig, deduplicateSessions };
 }

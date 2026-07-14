@@ -1,6 +1,7 @@
 import { DirectAiClient } from "./DirectAiClient";
 import { hasDirectAiConfig, type WorktableSettings } from "../settings";
 import { DEFAULT_SETTINGS } from "../settings";
+import { getProviderSpec } from "./ai/registry";
 
 export interface CloakfetchQuestion {
   type: "mc" | "cloze" | "tf" | "short";
@@ -123,6 +124,24 @@ export class CloakfetchClient {
 
   private get directAi(): DirectAiClient | null {
     if (!hasDirectAiConfig(this.settings)) return null;
+    // Direct browser → AI provider calls work ONLY when:
+    //  1. The provider's spec declares `browserSafe: true` (e.g. official
+    //     Anthropic / OpenAI / Gemini endpoints ship permissive CORS).
+    //  2. The configured baseUrl still points at the provider's official
+    //     default endpoint — overriding the URL means routing through a
+    //     third-party proxy, which usually rejects `anthropic-version` /
+    //     `anthropic-dangerous-direct-browser-access` in preflight.
+    //
+    // When either check fails, return null so the caller falls through to
+    // the local Cloakfetch service (`/ai/*` endpoints), which proxies the
+    // call server-side and avoids CORS entirely — same approach used in
+    // `server/server.py`.
+    const providerId = this.settings.aiProvider;
+    const spec = getProviderSpec(providerId);
+    if (!spec || spec.browserSafe !== true) return null;
+    const settingsBaseUrl = this.settings.aiBaseUrl.trim().replace(/\/+$/, "");
+    const defaultBaseUrl = spec.defaultBaseUrl.replace(/\/+$/, "");
+    if (settingsBaseUrl && settingsBaseUrl !== defaultBaseUrl) return null;
     return new DirectAiClient({
       provider: this.settings.aiProvider,
       apiKey: this.settings.aiApiKey.trim(),

@@ -288,6 +288,41 @@
   letter-spacing: 0.5px;
 }
 
+.obsidian-worktable .learn-paste-details {
+  margin: 8px 0 4px;
+}
+
+.obsidian-worktable .learn-paste-summary {
+  font-size: 12px;
+  color: var(--text-muted, #666);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  list-style: none;
+  user-select: none;
+}
+
+.obsidian-worktable .learn-paste-summary::-webkit-details-marker {
+  display: none;
+}
+
+.obsidian-worktable .learn-paste-summary::before {
+  content: "▸";
+  display: inline-block;
+  margin-right: 6px;
+  transition: transform 0.15s ease;
+  color: var(--text-muted, #888);
+}
+
+.obsidian-worktable .learn-paste-details[open] .learn-paste-summary::before {
+  transform: rotate(90deg);
+}
+
+.obsidian-worktable .learn-paste-summary:hover {
+  background: var(--background-modifier-hover, rgba(0, 0, 0, 0.04));
+  color: var(--text-normal, #1a1a1a);
+}
+
 .obsidian-worktable .learn-paste-textarea {
   width: 100%;
   min-height: 120px;
@@ -826,11 +861,162 @@
 .obsidian-worktable .home-learn-banner.active {
   background: var(--background-modifier-success, rgba(46, 160, 67, 0.12));
   border-color: var(--background-modifier-success-hover, rgba(46, 160, 67, 0.35));
-  color: var(--text-normal, #1a1a1a);
+  /* Use a fixed dark-green so contrast is correct in both light and dark
+     themes. --text-normal is theme-dependent (white in dark mode) and reads
+     as white-on-green, which is unreadable. */
+  color: #15803d;
+  font-weight: 600;
+}
+
+.obsidian-worktable.theme-dark .home-learn-banner.active,
+.obsidian-worktable .home-learn-banner.active {
+  color: #15803d;
 }
 
 .obsidian-worktable .home-learn-banner.inactive {
   background: var(--background-secondary, #f6f6f6);
   border-color: var(--background-modifier-border, #d8d8d8);
   color: var(--text-muted, #666);
+}
+
+/* Status banner at the very bottom of the learning module. Hidden by
+ * default via class toggle (not the `hidden` attribute, which CSS
+ * `display: flex` would otherwise override). The base rule omits
+ * `display` so the element collapses to its natural hidden state. */
+.obsidian-worktable .home-learn-loading {
+  display: none;
+  margin: 12px 0 4px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+  align-items: center;
+  gap: 8px;
+  background: var(--background-secondary, #f6f6f6);
+  border: 1px solid var(--background-modifier-border, #d8d8d8);
+  color: var(--text-muted, #555);
+}
+
+.obsidian-worktable .home-learn-loading.show {
+  display: flex;
+  animation: home-learn-loading-in 0.15s ease;
+}
+
+.obsidian-worktable .home-learn-loading.show.loading {
+  border-left: 3px solid var(--interactive-accent, #7c3aed);
+}
+
+.obsidian-worktable .home-learn-loading.show.ok {
+  background: rgba(46, 160, 67, 0.06);
+  border-color: rgba(46, 160, 67, 0.25);
+  border-left: 3px solid #16a34a;
+  color: #15803d;
+}
+
+.obsidian-worktable .home-learn-loading.show.err {
+  background: rgba(220, 38, 38, 0.06);
+  border-color: rgba(220, 38, 38, 0.25);
+  border-left: 3px solid #dc2626;
+  color: #b91c1c;
+}
+
+.obsidian-worktable .home-learn-spinner {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  border: 2px solid rgba(124, 58, 237, 0.2);
+  border-top-color: var(--interactive-accent, #7c3aed);
+  border-radius: 50%;
+  animation: home-learn-spin 0.7s linear infinite;
+}
+
+@keyframes home-learn-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes home-learn-loading-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Inline notice shown when the fetched URL has already been archived. */
+.obsidian-worktable .learn-archived-notice {
+  margin: 6px 0 4px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  background: rgba(46, 160, 67, 0.06);
+  border: 1px solid rgba(46, 160, 67, 0.25);
+  color: #15803d;
+}
+
+/* Global "submit all answers" button + archive row, below the question list. */
+.obsidian-worktable .learn-submit-all {
+  display: inline-block;
+  margin: 12px 0 8px;
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  background: var(--interactive-accent, #7c3aed);
+  color: var(--text-on-accent, #fff);
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.obsidian-worktable .learn-submit-all:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.obsidian-worktable .learn-submit-all:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.obsidian-worktable .learn-archive-row {
+  margin-top: 4px;
+}
+
+/* All questions rendered at once (no carousel). Each question is a card with
+ * its own submit button + inline feedback. */
+.obsidian-worktable .learn-question-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.obsidian-worktable .learn-question-card {
+  padding: 12px 14px;
+  border: 1px solid var(--background-modifier-border, #d8d8d8);
+  border-radius: 10px;
+  background: var(--background-primary, #fff);
+}
+
+.obsidian-worktable .learn-question-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.obsidian-worktable .learn-question-index {
+  font-size: 11px;
+  color: var(--text-muted, #666);
+  font-weight: 500;
+}
+
+.obsidian-worktable .learn-archive-summary {
+  font-size: 12px;
+  color: var(--text-muted, #666);
+  margin-left: 8px;
 }

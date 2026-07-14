@@ -295,10 +295,16 @@
 .obsidian-worktable .pomo-pill.custom  { background: rgba(155, 89, 182, 0.18); color: #884ea0; }
 
 .obsidian-worktable .pomo-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 4px 0 8px;
+}
+
+.obsidian-worktable .pomo-stats-row {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
-  margin: 4px 0 8px;
   text-align: center;
 }
 
@@ -309,16 +315,31 @@
   border-radius: 8px;
 }
 
+.obsidian-worktable .pomo-stats-row.avg .pomo-stat {
+  padding: 6px 4px;
+  background: var(--background-secondary, #f5f5f5);
+  border-style: dashed;
+}
+
 .obsidian-worktable .pomo-stat-v {
   font-size: 18px;
   font-weight: 700;
   color: var(--accent);
 }
 
+.obsidian-worktable .pomo-stats-row.avg .pomo-stat-v {
+  font-size: 14px;
+  color: var(--text-muted, #666);
+}
+
 .obsidian-worktable .pomo-stat-l {
   font-size: 10px;
   color: var(--text-faint, #999);
   text-transform: uppercase;
+}
+
+.obsidian-worktable .pomo-stats-row.avg .pomo-stat-l {
+  font-size: 9px;
 }
 
 .obsidian-worktable .pomo-db-status {

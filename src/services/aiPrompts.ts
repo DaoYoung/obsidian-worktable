@@ -51,9 +51,14 @@ export function keyPointsExtractionPrompt(title: string, text: string, maxPoints
 
 export function knowledgeExpandPrompt(name: string, context: string): { system: string; user: string } {
   const snippet = context.trim().slice(0, 4000);
-  const isEnglishWord = /^[A-Za-z][A-Za-z'\-]{0,30}$/.test((name || "").trim());
+  // Foreign-vocabulary detection: short input with no Chinese but Latin letters
+  // → treat as foreign-language learning and focus on the Chinese translation.
+  const trimmedName = (name || "").trim();
+  const hasCjk = /[一-鿿]/.test(trimmedName);
+  const hasLatin = /[A-Za-zÀ-ɏ]/.test(trimmedName);
+  const isEnglishWord = !hasCjk && hasLatin && trimmedName.length <= 40;
   const subjectHint = isEnglishWord
-    ? '"subject": "英文词汇"（1-3 句中文翻译,放 translation 字段；pos: n./v./adj./adv. 等）'
+    ? '"subject": "英文词汇"（这是外语学习,请把重点放在中文翻译上:translation 填 1-3 句中文释义;pos: n./v./adj./adv. 等词性）'
     : '"subject": 一个简洁中文学科标签,如 数学 / 物理 / 化学 / 生物 / 历史 / 地理 / 政治 / 语文 / 经济 / 哲学 / 心理学 / 计算机 / 其他';
   const system =
     "你是一个知识整理助手。请严格只返回 JSON 对象,不要任何其他文字、注释、Markdown 代码块。" +

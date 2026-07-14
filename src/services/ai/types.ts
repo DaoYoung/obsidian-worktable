@@ -54,6 +54,14 @@ export interface AiProviderSpec {
   defaultBaseUrl: string;
   defaultModel: string;
   modelPlaceholder: string;
+  /**
+   * True if the provider's official endpoint allows direct browser-to-server
+   * CORS preflight with the headers we send. When false, the plugin must
+   * route AI calls through the local Cloakfetch service (server.py) instead,
+   * because the upstream proxy rejects the request preflight (missing
+   * `Access-Control-Allow-Headers` entries for `anthropic-version`, etc.).
+   */
+  browserSafe: boolean;
   /** Build the HTTP request — returns the URL, headers, and JSON body string. */
   buildRequest(args: AiCallArgs): BuiltAiRequest;
   /** Pull assistant text out of a 2xx JSON response. Empty string when missing. */

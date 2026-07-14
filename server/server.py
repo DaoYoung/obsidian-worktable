@@ -585,9 +585,18 @@ def _expand_knowledge_point(name: str, context: str = "") -> dict:
       - raw: 原始 AI 输出（解析失败时的兜底）
     """
     snippet = context.strip()[:4000] if context else ""
-    is_english_word = bool(re.match(r"^[A-Za-z][A-Za-z'\-]{0,30}$", (name or "").strip()))
+    # Foreign-vocabulary detection: any short input with no Chinese characters
+    # but containing Latin/accented letters is treated as foreign-language
+    # learning (English words, phrases, café, naïve, …). We route it to the
+    # "英文词汇" subject so the writer files it as vocabulary and the AI focuses
+    # on the Chinese translation rather than a full subject write-up.
+    _name = (name or "").strip()
+    has_cjk = bool(re.search(r"[一-鿿]", _name))
+    has_latin = bool(re.search(r"[A-Za-zÀ-ɏ]", _name))
+    is_english_word = (not has_cjk) and has_latin and len(_name) <= 40
     subject_hint = (
-        '"subject": "英文词汇"（1-3 句中文翻译,放 translation 字段；pos: n./v./adj./adv. 等）'
+        '"subject": "英文词汇"（这是外语学习,请把重点放在中文翻译上:'
+        'translation 填 1-3 句中文释义,pos 填 n./v./adj./adv. 等词性）'
         if is_english_word
         else '"subject": 一个简洁中文学科标签,如 数学 / 物理 / 化学 / 生物 / 历史 / 地理 / 政治 / 语文 / 经济 / 哲学 / 心理学 / 计算机 / 其他'
     )

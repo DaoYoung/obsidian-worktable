@@ -25,6 +25,7 @@ export const AI_PROVIDERS: Record<AiProviderId, AiProviderSpec> = {
     defaultBaseUrl: "https://api.anthropic.com",
     defaultModel: "claude-sonnet-4-5",
     modelPlaceholder: "claude-sonnet-4-5",
+    browserSafe: true,
     ...anthropicHelpers,
   },
   openai: {
@@ -33,6 +34,7 @@ export const AI_PROVIDERS: Record<AiProviderId, AiProviderSpec> = {
     defaultBaseUrl: "https://api.openai.com/v1",
     defaultModel: "gpt-4o-mini",
     modelPlaceholder: "gpt-4o-mini",
+    browserSafe: true,
     ...openaiCompatHelpers,
   },
   gemini: {
@@ -41,6 +43,7 @@ export const AI_PROVIDERS: Record<AiProviderId, AiProviderSpec> = {
     defaultBaseUrl: "https://generativelanguage.googleapis.com/v1beta",
     defaultModel: "gemini-2.0-flash",
     modelPlaceholder: "gemini-2.0-flash",
+    browserSafe: true,
     ...geminiHelpers,
   },
   deepseek: {
@@ -49,6 +52,7 @@ export const AI_PROVIDERS: Record<AiProviderId, AiProviderSpec> = {
     defaultBaseUrl: "https://api.deepseek.com/v1",
     defaultModel: "deepseek-chat",
     modelPlaceholder: "deepseek-chat",
+    browserSafe: true,
     ...openaiCompatHelpers,
   },
   moonshot: {
@@ -57,6 +61,7 @@ export const AI_PROVIDERS: Record<AiProviderId, AiProviderSpec> = {
     defaultBaseUrl: "https://api.moonshot.cn/v1",
     defaultModel: "moonshot-v1-8k",
     modelPlaceholder: "moonshot-v1-8k",
+    browserSafe: true,
     ...openaiCompatHelpers,
   },
   zhipu: {
@@ -65,6 +70,7 @@ export const AI_PROVIDERS: Record<AiProviderId, AiProviderSpec> = {
     defaultBaseUrl: "https://open.bigmodel.cn/api/paas/v4",
     defaultModel: "glm-4-flash",
     modelPlaceholder: "glm-4-flash",
+    browserSafe: true,
     ...openaiCompatHelpers,
   },
   bailian: {
@@ -73,6 +79,7 @@ export const AI_PROVIDERS: Record<AiProviderId, AiProviderSpec> = {
     defaultBaseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
     defaultModel: "qwen-plus",
     modelPlaceholder: "qwen-plus",
+    browserSafe: true,
     ...openaiCompatHelpers,
   },
   volcengine: {
@@ -81,6 +88,7 @@ export const AI_PROVIDERS: Record<AiProviderId, AiProviderSpec> = {
     defaultBaseUrl: "https://ark.cn-beijing.volces.com/api/v3",
     defaultModel: "doubao-1-5-pro-32k-250115",
     modelPlaceholder: "doubao-1-5-pro-32k-250115",
+    browserSafe: true,
     ...openaiCompatHelpers,
   },
   minimax: {
@@ -89,6 +97,10 @@ export const AI_PROVIDERS: Record<AiProviderId, AiProviderSpec> = {
     defaultBaseUrl: "https://api.minimaxi.com/anthropic",
     defaultModel: "MiniMax-M3",
     modelPlaceholder: "MiniMax-M3",
+    // MiniMax does not whitelist `anthropic-version` in
+    // Access-Control-Allow-Headers, so direct browser calls fail preflight.
+    // Always route through the local Cloakfetch service.
+    browserSafe: false,
     ...anthropicHelpers,
   },
 };

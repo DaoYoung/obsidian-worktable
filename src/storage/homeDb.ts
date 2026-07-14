@@ -35,6 +35,7 @@ export interface HomeDb {
   clearDoneTodos(): Promise<void>;
   getAllLearningRecords(): Promise<LearningRecord[]>;
   addLearningRecord(record: Omit<LearningRecord, "id">): Promise<number>;
+  countLearningRecordsByUrl(url: string): Promise<number>;
   clearLearningRecords(): Promise<void>;
   getAllReadArticleIds(): Promise<string[]>;
   markArticleRead(path: string): Promise<void>;
@@ -156,6 +157,21 @@ export function createHomeDb(): HomeDb {
     });
   }
 
+  async function countLearningRecordsByUrl(url: string): Promise<number> {
+    if (!url) return 0;
+    const db = await open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("learningRecords", "readonly");
+      const req = tx.objectStore("learningRecords").getAll();
+      req.onsuccess = () => {
+        const all = (req.result || []) as LearningRecord[];
+        const target = url.trim();
+        resolve(all.filter((r) => (r.url || "").trim() === target).length);
+      };
+      req.onerror = () => reject(req.error);
+    });
+  }
+
   async function clearLearningRecords(): Promise<void> {
     const db = await open();
     return new Promise((resolve, reject) => {
@@ -216,6 +232,7 @@ export function createHomeDb(): HomeDb {
     clearDoneTodos,
     getAllLearningRecords,
     addLearningRecord,
+    countLearningRecordsByUrl,
     clearLearningRecords,
     getAllReadArticleIds,
     markArticleRead,
