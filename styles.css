@@ -1,6 +1,6 @@
 /* ===========================================================================
    Obsidian Worktable — Built Styles
-   Generated: 2026-07-15T12-35-34
+   Generated: 2026-07-15T12-44-11
    Sources:
  *  - src/styles/base.css
  *  - src/styles/productivity.css
@@ -1633,8 +1633,7 @@
 
 .worktable .learn-description a {
   color: #3498db;
-  text-decoration: underline;
-  text-decoration-style: dotted;
+  text-decoration: underline dotted;
   cursor: pointer;
 }
 
@@ -1645,7 +1644,7 @@
   border-radius: 6px;
   font-size: 11px;
   line-height: 1.6;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: SFMono-Regular, Menlo, monospace;
   white-space: pre-wrap;
   word-break: break-all;
   max-height: 200px;

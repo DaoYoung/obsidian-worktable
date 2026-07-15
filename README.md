@@ -1,5 +1,18 @@
 # Obsidian Worktable
 
+A native Obsidian dashboard plugin for focus, tasks, learning, review, and news.
+
+Built as a single custom `ItemView` (no Dataview dependency), with widgets for
+pomodoro focus tracking, todo management, inquiry-based and active-recall
+learning, news aggregation, and end-of-day review. AI features can run either
+through the bundled local Cloakfetch service or via direct browser calls to
+Anthropic / OpenAI / Gemini endpoints. Storage uses native IndexedDB; styles
+live in plain CSS files compiled by a tiny concatenation step.
+
+— Translated description below —
+
+---
+
 一款用于专注、任务、学习、回顾和资讯的原生 Obsidian 仪表盘插件。
 
 ## 功能特性
