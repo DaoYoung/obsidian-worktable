@@ -1,5 +1,4 @@
-import { MarkdownRenderer } from "obsidian";
-import { CloakfetchClient, type ExpandedKnowledge } from "../services/CloakfetchClient";
+import { CloakfetchClient } from "../services/CloakfetchClient";
 import { KnowledgeService } from "../services/KnowledgeService";
 import { createHomeDb, type LearningRecord } from "../storage/homeDb";
 import { type WorktableSettings } from "../settings";
@@ -16,7 +15,7 @@ interface Question {
   explanation?: string;
 }
 
-interface LearningState {
+interface InquiryState {
   url: string;
   title: string;
   article: string;
@@ -29,7 +28,7 @@ interface LearningState {
   selectedPoints: Set<number>;
 }
 
-interface LearningSettings {
+interface InquirySettings {
   knowledgeFile?: unknown;
   enableFallbackProxies?: unknown;
 }
@@ -37,9 +36,9 @@ interface LearningSettings {
 const KNOWLEDGE_CACHE_KEY = "home-knowledge-cache-v1";
 const FLOWER_KEY = "home-learning-flowers";
 
-export function mountLearningWidget(containerEl: HTMLElement, context: WidgetContext): void {
+export function mountInquiryLearningWidget(containerEl: HTMLElement, context: WidgetContext): void {
   const { app, component, dashboardEl } = context;
-  const settings = context.settings as LearningSettings & Partial<WorktableSettings>;
+  const settings = context.settings as InquirySettings & Partial<WorktableSettings>;
   const knowledgePath = typeof settings.knowledgeFile === "string" && settings.knowledgeFile.trim()
     ? settings.knowledgeFile.trim()
     : "plans/知识点.md";
@@ -47,15 +46,13 @@ export function mountLearningWidget(containerEl: HTMLElement, context: WidgetCon
   const knowledge = new KnowledgeService(app, knowledgePath);
   const db = createHomeDb();
   let state = emptyState();
-  let pendingEntry: ExpandedKnowledge | null = null;
-  let pendingName = "";
   let disposed = false;
 
   const root = containerEl.createDiv({ cls: "home-learn" });
   const heading = root.createEl("h3");
   const statusEl = heading.createSpan({ cls: "learn-status", text: "空闲" });
 
-  // 顶部 2:1 布局：左 ① 输入文章，右 小红花+归档（WorktableView 挂载到 slot）
+  // 顶部 2:1 布局：左 ① 输入文章，右 小红花（WorktableView 挂载到 slot）
   const topRow = root.createDiv({ cls: "learn-top-row" });
   const inputCol = topRow.createDiv({ cls: "learn-top-input" });
   const flowersSlot = topRow.createDiv({
@@ -91,14 +88,12 @@ export function mountLearningWidget(containerEl: HTMLElement, context: WidgetCon
   const pasteClearButton = button(pasteRow, "清空", "secondary compact");
 
   // ② + ③: 重点摘录 (左) 与 题目训练 (右) 拆为左右两列。
-  //    顶部保留 ① 输入文章 section (全宽)，底部保留 ⑤ 知识点 section (全宽)。
-  //    两列等高，超出最大高度时各自内部滚动。
   //    渐进式呈现：① 输入 → 出现左右两列 → 点提取重点才出补充到知识库
-  //    → 点 AI 出题才出提交答案 → 点提交答案才出归档。
+  //    → 点 AI 出题才出提交答案 → 点提交答案后才显示归档反馈。
   const learnSplit = root.createDiv({ cls: "learn-split" });
   learnSplit.hidden = true;
 
-  // 左列：重点摘录（原文不再展示，已填充到粘贴正文输入框）
+  // 左列：重点摘录
   const leftCol = learnSplit.createDiv({ cls: "learn-col learn-col-left" });
   leftCol.createDiv({ cls: "learn-col-h", text: "② 重点摘录" });
   const extractRow = leftCol.createDiv({ cls: "learn-row" });
@@ -112,7 +107,7 @@ export function mountLearningWidget(containerEl: HTMLElement, context: WidgetCon
   const selectNoneButton = button(keyPointActions, "全不选", "secondary");
   const keyPointStatus = keyPointActions.createSpan({ cls: "kp-status" });
 
-  // 右列：题目训练（提交/归档按交互逐步出现）
+  // 右列：题目训练（提交按交互逐步出现）
   const rightCol = learnSplit.createDiv({ cls: "learn-col learn-col-right" });
   rightCol.createDiv({ cls: "learn-col-h", text: "③ 题目训练" });
   const generateRow = rightCol.createDiv({ cls: "learn-row" });
@@ -124,30 +119,7 @@ export function mountLearningWidget(containerEl: HTMLElement, context: WidgetCon
   submitAllButton.hidden = true;
   const archiveSummary = rightScroll.createSpan({ cls: "learn-archive-summary" });
 
-  const conceptSection = section(root, "⑤ 录入新知识点（无需抓取）");
-  const conceptDescription = conceptSection.createDiv({ cls: "learn-description" });
-  conceptDescription.appendText("输入概念，AI 会先整理为 Markdown 供预览，确认后再写入 ");
-  const knowledgeLink = conceptDescription.createEl("a", { text: knowledgePath, href: "#" });
-  const conceptRow = conceptSection.createDiv({ cls: "learn-row learn-concept-row" });
-  const conceptName = conceptRow.createEl("input", { type: "text", placeholder: "知识点名称…" });
-  const conceptContext = conceptRow.createEl("input", { type: "text", placeholder: "可选：补充上下文" });
-  const organizeButton = button(conceptRow, "🚀 AI 整理", "success");
-  const conceptStatus = conceptSection.createDiv({ cls: "kp-status" });
-  const preview = conceptSection.createDiv({ cls: "kp-preview" });
-  preview.hidden = true;
-  preview.createDiv({ cls: "kp-preview-h", text: "📋 AI 整理预览 · 确认无误后再写入" });
-  const previewSubject = preview.createDiv({ cls: "kp-preview-subject" });
-  previewSubject.hidden = true;
-  const previewBody = preview.createDiv({ cls: "kp-preview-body" });
-  const previewActions = preview.createDiv({ cls: "kp-preview-actions" });
-  const confirmButton = button(previewActions, "✅ 确认写入", "success");
-  const regenerateButton = button(previewActions, "🔄 重新生成", "secondary");
-  const cancelButton = button(previewActions, "❌ 取消", "secondary");
-
-  // Status banner at the very bottom of the learning module. Hidden by
-  // default; only shown during active AI operations or briefly after
-  // success/error. Uses a class-only show/hide (not the `hidden`
-  // attribute) so CSS `display: flex` doesn't override it.
+  // Status banner at the very bottom of the inquiry module.
   const loadingBanner = root.createDiv({ cls: "home-learn-loading", attr: { "aria-hidden": "true" } });
 
   const listen = <K extends keyof HTMLElementEventMap>(
@@ -201,11 +173,6 @@ export function mountLearningWidget(containerEl: HTMLElement, context: WidgetCon
     void app.workspace.openLinkText(knowledgePath.replace(/\.md$/i, ""), "/", true);
   };
 
-  // After a successful fetch/paste, the top section collapses from
-  // "input mode" to "loaded mode": URL input + fetch hide, the
-  // archive button surfaces, and the paste-area summary becomes "正文"
-  // with its action buttons hidden (text is now read-only context, not
-  // an editable input). resetRound() restores the original layout.
   const setInputSectionLoaded = (loaded: boolean): void => {
     urlInput.hidden = loaded;
     fetchButton.hidden = loaded;
@@ -215,11 +182,6 @@ export function mountLearningWidget(containerEl: HTMLElement, context: WidgetCon
     pasteClearButton.hidden = loaded;
     pasteSummary.setText(loaded ? "正文" : "📋 粘贴正文（无需本地服务 · 点击展开）");
   };
-
-  listen(knowledgeLink, "click", (event) => {
-    event.preventDefault();
-    openKnowledge();
-  });
 
   listen(fetchButton, "click", () => {
     void runFetch();
@@ -249,16 +211,6 @@ export function mountLearningWidget(containerEl: HTMLElement, context: WidgetCon
     submitAllAnswers();
   });
   listen(newRoundButton, "click", resetRound);
-  listen(organizeButton, "click", () => {
-    void organizeConcept(false);
-  });
-  listen(regenerateButton, "click", () => {
-    void organizeConcept(true);
-  });
-  listen(confirmButton, "click", () => {
-    void confirmConceptWrite();
-  });
-  listen(cancelButton, "click", cancelConcept);
 
   component.register(() => {
     disposed = true;
@@ -279,21 +231,14 @@ export function mountLearningWidget(containerEl: HTMLElement, context: WidgetCon
       state.url = url;
       state.title = article.title || url;
       state.article = article.text;
-      // 内容填充到粘贴正文输入框（统一手动粘贴与 URL 抓取两条路径），
-      // 并展开折叠区，让用户能直接看到/编辑正文。
       pasteTextarea.value = article.text;
       pasteDetails.open = true;
       learnSplit.hidden = false;
       questionList.empty();
-      // Reset previous submission state when fetching a new article.
       state.lastAnswers = [];
       state.lastCorrect = [];
-      // Collapse the top section to "loaded mode": hide URL input + fetch,
-      // surface archive button. Reset will restore them.
       setInputSectionLoaded(true);
       hideArchivedNotice();
-      // Check whether this URL was already archived — inform the user so
-      // they don't redo work that's already been recorded.
       try {
         const archivedCount = await db.countLearningRecordsByUrl(url);
         if (disposed) return;
@@ -304,19 +249,12 @@ export function mountLearningWidget(containerEl: HTMLElement, context: WidgetCon
       setStatus(`已抓取 · ${article.text.length} 字`, "ok");
     } catch (error) {
       showError(error, "抓取失败");
-      // Surface a hint that paste-text is the zero-install alternative.
       setStatus("抓取失败时,直接粘贴正文到下方文本框,无需任何本地服务。", "err");
     } finally {
       fetchButton.disabled = false;
     }
   }
 
-  /**
-   * Skip Cloakfetch entirely: take whatever the user pasted, normalize whitespace,
-   * optionally lift a title from the first non-empty line, and feed the body
-   * straight to the AI handlers. This makes the Learning widget fully usable
-   * on machines without the local service (including Obsidian Mobile).
-   */
   async function runPaste(): Promise<void> {
     const raw = pasteTextarea.value;
     if (!raw.trim()) {
@@ -333,8 +271,6 @@ export function mountLearningWidget(containerEl: HTMLElement, context: WidgetCon
       state.url = "(粘贴)";
       state.title = title || "粘贴的文章";
       state.article = text;
-      // Paste path: hide paste-action buttons and re-label the summary,
-      // but keep the URL/fetch row visible (paste doesn't go through fetch).
       pasteButton.hidden = true;
       pasteClearButton.hidden = true;
       pasteSummary.setText("正文");
@@ -442,7 +378,6 @@ export function mountLearningWidget(containerEl: HTMLElement, context: WidgetCon
 
   function submitAllAnswers(): void {
     if (!state.questions.length) return;
-    // Read each answer and report any missing ones up-front.
     const answers: string[] = [];
     const missing: number[] = [];
     state.questions.forEach((q, i) => {
@@ -476,7 +411,6 @@ export function mountLearningWidget(containerEl: HTMLElement, context: WidgetCon
         explanation.hidden = !question.explanation;
         explanation.setText(question.explanation ? `💡 ${question.explanation}` : "");
       }
-      // Mark correct/incorrect on the option list; lock inputs.
       const optionList = card.querySelector(".learn-options");
       if (optionList) {
         optionList.querySelectorAll<HTMLButtonElement>(".learn-option").forEach((optionEl) => {
@@ -567,8 +501,6 @@ export function mountLearningWidget(containerEl: HTMLElement, context: WidgetCon
     keyPointActions.hidden = true;
     hideArchivedNotice();
     hideLoading();
-    // Restore top section to input mode: URL row visible, paste action
-    // buttons back, archive button hidden.
     setInputSectionLoaded(false);
     setStatus("空闲");
   }
@@ -666,155 +598,12 @@ export function mountLearningWidget(containerEl: HTMLElement, context: WidgetCon
     }
   }
 
-  async function organizeConcept(regenerate: boolean): Promise<void> {
-    const name = conceptName.value.trim() || pendingName;
-    if (!name) {
-      conceptStatus.className = "kp-status err";
-      conceptStatus.setText("请输入知识点名称");
-      return;
-    }
-    setPreviewButtonsDisabled(true);
-    organizeButton.disabled = true;
-    conceptStatus.className = "kp-status";
-    conceptStatus.setText(regenerate ? "重新生成中…" : "AI 整理中…");
-    showLoading(regenerate ? "🔄 AI 正在重新整理知识点…" : `🚀 AI 正在整理「${name}」…`);
-    try {
-      const entry = await client.expandKnowledge(name, conceptContext.value.trim());
-      if (!entry.markdown.trim()) throw new Error("AI 返回为空");
-      if (disposed) return;
-      pendingEntry = entry;
-      pendingName = name;
-      previewBody.empty();
-      await MarkdownRenderer.render(app, entry.markdown, previewBody, knowledgePath, component);
-      showPreviewSubject(entry);
-      preview.hidden = false;
-      conceptStatus.setText("请预览后确认写入");
-      setStatus(`已生成预览 · 待确认：${name}`);
-      showDone("✅ 已生成预览，请确认后写入");
-    } catch (error) {
-      preview.hidden = true;
-      previewSubject.hidden = true;
-      conceptStatus.className = "kp-status err";
-      conceptStatus.setText(`整理失败：${errorMessage(error)}`);
-      showDone(`❌ 整理失败：${errorMessage(error)}`, "err");
-    } finally {
-      organizeButton.disabled = false;
-      setPreviewButtonsDisabled(false);
-    }
-  }
-
-  function showPreviewSubject(entry: ExpandedKnowledge): void {
-    const subjectLabel = (entry.subject || "").trim();
-    if (!subjectLabel) {
-      previewSubject.hidden = true;
-      previewSubject.empty();
-      return;
-    }
-    previewSubject.hidden = false;
-    previewSubject.empty();
-    const tag = previewSubject.createSpan({ cls: "kp-preview-tag", text: subjectLabel });
-    if (subjectLabel === "英文词汇") tag.addClass("kp-preview-tag-word");
-    else if (subjectLabel === "数学") tag.addClass("kp-preview-tag-math");
-    else tag.addClass("kp-preview-tag-subject");
-    if (subjectLabel === "英文词汇") {
-      const translation = (entry.translation || "").trim();
-      if (translation) {
-        previewSubject.createSpan({ text: " · " });
-        previewSubject.createSpan({
-          cls: "kp-preview-translation",
-          text: `翻译：${translation}`,
-        });
-      }
-      const pos = (entry.pos || "").trim();
-      if (pos) {
-        previewSubject.createSpan({ text: " · " });
-        previewSubject.createSpan({ cls: "kp-preview-pos", text: `词性：${pos}` });
-      }
-    }
-  }
-
-  async function confirmConceptWrite(): Promise<void> {
-    if (!pendingEntry || !pendingName) {
-      conceptStatus.className = "kp-status err";
-      conceptStatus.setText("没有可写入的预览");
-      return;
-    }
-    const entry = pendingEntry;
-    const name = pendingName;
-    setPreviewButtonsDisabled(true);
-    conceptStatus.setText("写入中…");
-    try {
-      const subjectLabel = (entry.subject || "").trim();
-      const isEnglishWord = subjectLabel === "英文词汇"
-        || knowledge.inferCategory(name, entry.markdown) === "word";
-      if (isEnglishWord) {
-        await knowledge.appendWithOptions({
-          category: "word",
-          name,
-          content: entry.markdown,
-          translation: entry.translation,
-          pos: entry.pos,
-        });
-      } else if (subjectLabel === "数学" || knowledge.inferCategory(name, entry.markdown) === "math") {
-        await knowledge.append("math", name, entry.markdown);
-      } else if (subjectLabel && subjectLabel !== "随手记" && subjectLabel !== "其他") {
-        await knowledge.appendWithOptions({
-          category: "subject",
-          name,
-          content: entry.markdown,
-          subject: subjectLabel,
-        });
-      } else {
-        await knowledge.append("misc", name, entry.markdown);
-      }
-      localStorage.removeItem(KNOWLEDGE_CACHE_KEY);
-      if (disposed) return;
-      conceptStatus.className = "kp-status ok";
-      conceptStatus.empty();
-      conceptStatus.appendText(`已写入 ${subjectLabel || "随手记"} · `);
-      const link = conceptStatus.createEl("a", { text: knowledgePath, href: "#" });
-      listen(link, "click", (event) => {
-        event.preventDefault();
-        openKnowledge();
-      });
-      pendingEntry = null;
-      pendingName = "";
-      conceptName.value = "";
-      conceptContext.value = "";
-      preview.hidden = true;
-      previewSubject.hidden = true;
-      previewBody.empty();
-      setStatus(`知识点已写入 ${subjectLabel || "随手记"}`, "ok");
-    } catch (error) {
-      conceptStatus.className = "kp-status err";
-      conceptStatus.setText(`写入失败：${errorMessage(error)}`);
-    } finally {
-      setPreviewButtonsDisabled(false);
-    }
-  }
-
-  function cancelConcept(): void {
-    pendingEntry = null;
-    pendingName = "";
-    preview.hidden = true;
-    previewSubject.hidden = true;
-    previewBody.empty();
-    conceptStatus.className = "kp-status";
-    conceptStatus.setText("已取消（未写入）");
-  }
-
-  function setPreviewButtonsDisabled(disabled: boolean): void {
-    confirmButton.disabled = disabled;
-    regenerateButton.disabled = disabled;
-    cancelButton.disabled = disabled;
-  }
-
   function showError(error: unknown, prefix: string): void {
     if (!disposed) setStatus(`${prefix}：${errorMessage(error)}`, "err");
   }
 }
 
-function emptyState(): LearningState {
+function emptyState(): InquiryState {
   return {
     url: "",
     title: "",
@@ -837,11 +626,6 @@ function button(parent: HTMLElement, text: string, className = ""): HTMLButtonEl
   return parent.createEl("button", { text, cls: className });
 }
 
-/**
- * Content-aware question count (1–5): short articles get a single question,
- * long articles get up to five. Keeps the quiz proportional to how much there
- * is to test.
- */
 function pickQuestionCount(textLength: number): number {
   if (textLength < 500) return 1;
   if (textLength < 1500) return 2;
@@ -850,34 +634,19 @@ function pickQuestionCount(textLength: number): number {
   return 5;
 }
 
-/**
- * Fetch the article body for a given URL.
- *
- * Order of attempts:
- *   1. Local Cloakfetch service (`/fetch`). When present, prefers the
- *      server-extracted Markdown so the AI prompt stays clean.
- *   2. Public CORS proxies (`api.allorigins.win`, `corsproxy.io`) when the
- *      user has `enableFallbackProxies` set.
- *
- * Returns the cleaned article text + title. The raw HTML is also returned
- * so callers can keep it on `state.article` for future fallback use.
- */
 async function fetchArticle(
   client: CloakfetchClient,
   url: string,
   allowPublicFallbacks: boolean,
 ): Promise<{ title: string; text: string; html: string }> {
-  // 1) Local service
   try {
     const res = await client.fetchUrl(url);
     if (res && typeof res === "object" && res.ok) {
       const html = typeof res.html === "string" ? res.html : "";
       const serverTitle = typeof res.title === "string" ? res.title : "";
-      // Prefer server-extracted markdown when present (Cloakfetch v0.2.4+).
       if (typeof res.markdown === "string" && res.markdown.trim().length >= 50) {
         return { title: serverTitle, text: res.markdown.trim().slice(0, 6_000), html };
       }
-      // Fallback: client-side HTML→text extraction.
       if (html.length >= 50) {
         const article = htmlToArticle(html);
         return { title: serverTitle || article.title, text: article.text, html };
@@ -888,7 +657,6 @@ async function fetchArticle(
     if (!allowPublicFallbacks) throw localError;
   }
 
-  // 2) Public CORS proxies — return raw HTML; client extracts text.
   const attempts = [
     `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
     `https://corsproxy.io/?${encodeURIComponent(url)}`,
@@ -932,9 +700,6 @@ function htmlToArticle(html: string): { title: string; text: string } {
   return { title, text };
 }
 
-/** Normalize a pasted article body. Lifts a probable title from the first
- * non-empty line if it's short enough (<= 120 chars and doesn't end with
- * sentence punctuation), then collapses whitespace and trims. */
 function normalizeQuestions(value: unknown): Question[] {
   const candidates = Array.isArray(value) ? value : [];
   return candidates.flatMap((candidate): Question[] => {
@@ -989,15 +754,6 @@ function normalizeTruth(value: string): string {
   if (["对", "true", "t", "√", "yes", "y", "1"].includes(normalized)) return "对";
   if (["错", "false", "f", "×", "x", "no", "n", "0"].includes(normalized)) return "错";
   return normalized;
-}
-
-function formatDiagnostic(value: unknown): string {
-  if (typeof value === "string") return value;
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
 }
 
 function errorMessage(error: unknown): string {

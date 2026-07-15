@@ -972,7 +972,8 @@
  * default via class toggle (not the `hidden` attribute, which CSS
  * `display: flex` would otherwise override). The base rule omits
  * `display` so the element collapses to its natural hidden state. */
-.worktable .home-learn-loading {
+.worktable .home-learn-loading,
+.worktable .home-recall-loading {
   display: none;
   margin: 12px 0 4px;
   padding: 8px 12px;
@@ -987,30 +988,35 @@
   color: var(--text-muted, #555);
 }
 
-.worktable .home-learn-loading.show {
+.worktable .home-learn-loading.show,
+.worktable .home-recall-loading.show {
   display: flex;
   animation: home-learn-loading-in 0.15s ease;
 }
 
-.worktable .home-learn-loading.show.loading {
+.worktable .home-learn-loading.show.loading,
+.worktable .home-recall-loading.show.loading {
   border-left: 3px solid var(--interactive-accent, #7c3aed);
 }
 
-.worktable .home-learn-loading.show.ok {
+.worktable .home-learn-loading.show.ok,
+.worktable .home-recall-loading.show.ok {
   background: rgba(46, 160, 67, 0.06);
   border-color: rgba(46, 160, 67, 0.25);
   border-left: 3px solid #16a34a;
   color: #15803d;
 }
 
-.worktable .home-learn-loading.show.err {
+.worktable .home-learn-loading.show.err,
+.worktable .home-recall-loading.show.err {
   background: rgba(220, 38, 38, 0.06);
   border-color: rgba(220, 38, 38, 0.25);
   border-left: 3px solid #dc2626;
   color: #b91c1c;
 }
 
-.worktable .home-learn-spinner {
+.worktable .home-learn-spinner,
+.worktable .home-recall-spinner {
   width: 14px;
   height: 14px;
   flex: 0 0 auto;

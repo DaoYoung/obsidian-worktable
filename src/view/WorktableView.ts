@@ -19,7 +19,8 @@ function getWidgetDescriptors(): WidgetDescriptor[] {
   const modules: Array<{ id: WidgetId; title: string; loader: () => Promise<WidgetMount> }> = [
     { id: "pomodoro", title: "🍅 番茄钟", loader: () => import("../widgets/pomodoro").then((m) => m.mount) },
     { id: "todo", title: "✅ 任务清单", loader: () => import("../widgets/todo").then((m) => m.mount) },
-    { id: "learning", title: "🌱 学习", loader: () => import("../widgets/learning").then((m) => m.mount) },
+    { id: "inquiry", title: "🌱 探究性学习", loader: () => import("../widgets/inquiry").then((m) => m.mount) },
+    { id: "active-recall", title: "🧠 主动回忆学习", loader: () => import("../widgets/active-recall").then((m) => m.mount) },
     { id: "flowers", title: "🌸 小红花", loader: () => import("../widgets/flowers").then((m) => m.mount) },
     { id: "review", title: "🎓 今日复习", loader: () => import("../widgets/review").then((m) => m.mount) },
     { id: "news", title: "📰 新闻", loader: () => import("../widgets/news").then((m) => m.mount) },
@@ -85,9 +86,9 @@ export class WorktableView extends ItemView {
 
     const descriptors = getWidgetDescriptors();
     for (const descriptor of descriptors) {
-      // flowers 走特殊路径：挂到 learning 顶部右侧的 slot（不占 grid cell）
+      // flowers 走特殊路径：挂到 inquiry 顶部右侧的 slot（不占 grid cell）
       if (descriptor.id === "flowers") {
-        await this.mountFlowersIntoLearningSlot(descriptor, context);
+        await this.mountFlowersIntoInquirySlot(descriptor, context);
         continue;
       }
       const section = this.sections.find((s) => s.id === descriptor.id);
@@ -96,24 +97,24 @@ export class WorktableView extends ItemView {
     }
   }
 
-  private async mountFlowersIntoLearningSlot(
+  private async mountFlowersIntoInquirySlot(
     descriptor: WidgetDescriptor,
     context: WidgetContext,
   ): Promise<void> {
-    const learningSection = this.sections.find((s) => s.id === "learning");
-    const slot = learningSection?.widgetEl.querySelector<HTMLElement>("[data-flowers-slot]");
+    const inquirySection = this.sections.find((s) => s.id === "inquiry");
+    const slot = inquirySection?.widgetEl.querySelector<HTMLElement>("[data-flowers-slot]");
     if (!slot) {
-      // learning widget 还没渲染或没有 slot——跳过，避免占位空白
+      // inquiry widget 还没渲染或没有 slot——跳过，避免占位空白
       return;
     }
     try {
       const mount = await descriptor.mount();
       mount(slot, context);
-      learningSection?.errorEl.hide();
+      inquirySection?.errorEl.hide();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      learningSection?.errorEl.setText(`⚠ Widget failed: ${message}`);
-      learningSection?.errorEl.show();
+      inquirySection?.errorEl.setText(`⚠ Widget failed: ${message}`);
+      inquirySection?.errorEl.show();
       // eslint-disable-next-line no-console
       console.error(`[worktable] widget ${descriptor.id} failed`, err);
     }
@@ -140,10 +141,11 @@ export class WorktableView extends ItemView {
     const layouts: Array<{ id: WidgetId; title: string; row: "top" | "mid" | "bottom" }> = [
       { id: "pomodoro", title: "🍅 番茄钟", row: "top" },
       { id: "todo", title: "✅ 任务清单", row: "top" },
-      { id: "learning", title: "🌱 学习", row: "mid" },
-      // flowers 移到 learning 顶部右侧的 slot（见 mountWidget 特殊处理）
+      { id: "inquiry", title: "🌱 探究性学习", row: "mid" },
+      // flowers 移到 inquiry 顶部右侧的 slot（见 mountWidget 特殊处理）
+      { id: "active-recall", title: "🧠 主动回忆学习", row: "mid" },
       { id: "review", title: "🎓 今日复习", row: "bottom" },
-      { id: "news", title: "📰 新闻", row: "mid" },
+      { id: "news", title: "📰 新闻", row: "bottom" },
     ];
 
     const rowMap: Record<string, HTMLElement> = {};
