@@ -1,6 +1,6 @@
 /* ===========================================================================
    Obsidian Worktable — Built Styles
-   Generated: 2026-07-15T06-18-13
+   Generated: 2026-07-15T06-32-01
    Sources:
  *  - src/styles/base.css
  *  - src/styles/productivity.css
@@ -443,6 +443,15 @@
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
   color: var(--text-normal, #1a1a1a);
   box-sizing: border-box;
+}
+
+/* ── Dashboard grid ────────────────────────────────────────
+   每个模块独占一行;行间距 = 1 行文字高度(line-height: 1.6,所以 1.6em)。
+   ──────────────────────────────────────────────────────── */
+.worktable .worktable-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1.6em;
 }
 
 /* ── Pomodoro ─────────────────────────────────────────────── */

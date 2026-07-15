@@ -10,6 +10,15 @@
   box-sizing: border-box;
 }
 
+/* ── Dashboard grid ────────────────────────────────────────
+   每个模块独占一行;行间距 = 1 行文字高度(line-height: 1.6,所以 1.6em)。
+   ──────────────────────────────────────────────────────── */
+.worktable .worktable-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1.6em;
+}
+
 /* ── Pomodoro ─────────────────────────────────────────────── */
 
 .worktable .pomo-widget-instance {

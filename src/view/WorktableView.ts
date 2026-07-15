@@ -138,25 +138,18 @@ export class WorktableView extends ItemView {
   }
 
   private buildSections(grid: HTMLElement): SectionContainer[] {
-    const layouts: Array<{ id: WidgetId; title?: string; row: "top" | "mid" | "bottom" }> = [
-      { id: "pomodoro", title: "🍅 番茄钟", row: "top" },
-      { id: "todo", title: "✅ 任务清单", row: "top" },
-      { id: "inquiry", title: "🌱 探究性学习", row: "mid" },
-      // flowers 移到 inquiry 顶部右侧的 slot（见 mountWidget 特殊处理）
-      { id: "active-recall", title: "🧠 主动回忆学习", row: "mid" },
-      // review 不渲染 cell title,让 review widget 自带的 "📅 今日复习 · 日期" 充当标题
-      { id: "review", row: "bottom" },
-      { id: "news", title: "📰 新闻", row: "bottom" },
+    // 5 个独立模块,每个模块独占一行;flowers 仍挂到 inquiry 顶部右侧的 slot。
+    // 行间距由 .worktable-grid 上的 gap 控制(1 行文字高度)。
+    const layouts: Array<{ id: WidgetId; title?: string }> = [
+      { id: "pomodoro", title: "🍅 番茄钟" },
+      { id: "todo", title: "✅ 任务清单" },
+      { id: "inquiry", title: "🌱 探究性学习" },
+      { id: "active-recall", title: "🧠 主动回忆学习" },
+      { id: "news", title: "📰 新闻" },
     ];
 
-    const rowMap: Record<string, HTMLElement> = {};
     for (const layout of layouts) {
-      let row = rowMap[layout.row];
-      if (!row) {
-        row = grid.createDiv({ cls: `worktable-row worktable-row-${layout.row}` });
-        rowMap[layout.row] = row;
-      }
-      const wrapper = row.createDiv({ cls: `worktable-cell worktable-cell-${layout.id}` });
+      const wrapper = grid.createDiv({ cls: `worktable-cell worktable-cell-${layout.id}` });
       if (layout.title) {
         wrapper.createDiv({ cls: "worktable-cell-title", text: layout.title });
       }
