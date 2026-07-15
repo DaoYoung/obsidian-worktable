@@ -33,7 +33,7 @@ export function mountFlowersWidget(containerEl: HTMLElement, context: WidgetCont
   headDiv.appendChild(flowerCountDiv);
 
   const flowerIcon = document.createElement("span");
-  flowerIcon.className = "icon";
+  flowerIcon.className = "icon bloom";
   flowerIcon.id = "flower-icon";
   flowerIcon.textContent = "🌸";
   flowerCountDiv.appendChild(flowerIcon);
@@ -55,18 +55,17 @@ export function mountFlowersWidget(containerEl: HTMLElement, context: WidgetCont
 
   // Archives header
   const archivesHeader = document.createElement("div");
-  archivesHeader.style.cssText = "display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;";
+  archivesHeader.className = "flowers-archive-head";
   wrap.appendChild(archivesHeader);
 
   const archivesTitle = document.createElement("span");
-  archivesTitle.style.cssText =
-    "font-size:11px;color:var(--text-muted,#666);text-transform:uppercase;letter-spacing:1px;font-weight:600;";
+  archivesTitle.className = "flowers-archive-title";
   archivesTitle.textContent = "📚 最近归档";
   archivesHeader.appendChild(archivesTitle);
 
   const btnClear = document.createElement("button");
   btnClear.id = "btn-clear-flowers";
-  btnClear.style.cssText = "background:transparent;border:none;color:var(--text-faint,#999);cursor:pointer;font-size:10px;";
+  btnClear.className = "flowers-clear-btn";
   btnClear.textContent = "🗑 重置";
   archivesHeader.appendChild(btnClear);
 
@@ -80,9 +79,9 @@ export function mountFlowersWidget(containerEl: HTMLElement, context: WidgetCont
   function renderFlowers(): void {
     const total = parseInt(localStorage.getItem(FLOWERS_KEY) || "0");
     flowerCount.textContent = String(total);
-    flowerIcon.style.animation = "none";
+    flowerIcon.classList.remove("bloom");
     void flowerIcon.offsetWidth;
-    flowerIcon.style.animation = "";
+    flowerIcon.classList.add("bloom");
   }
 
   function renderArchives(records: Array<{

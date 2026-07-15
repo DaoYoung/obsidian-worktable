@@ -8,21 +8,19 @@
  * breaks the cycle and keeps settings.ts focused on setting definitions.
  */
 
-import { Setting } from "obsidian";
+import { Platform, Setting } from "obsidian";
 import type ObsidianWorktablePlugin from "./main";
 import { CloakfetchClient } from "./services/CloakfetchClient";
 import type { SettingsStrings } from "./settingsStrings";
 
-type Platform = "macos" | "linux" | "windows" | "unknown";
+type HostPlatform = "macos" | "linux" | "windows" | "unknown";
 
-/** Detect the host platform from `navigator.platform`. Falls back to
+/** Detect the host platform via Obsidian's `Platform` API. Falls back to
  * `unknown` so the wizard can still render cross-platform instructions. */
-function detectPlatform(): Platform {
-  const p = (typeof navigator !== "undefined" && navigator.platform) || "";
-  const lower = p.toLowerCase();
-  if (lower.includes("mac")) return "macos";
-  if (lower.includes("win")) return "windows";
-  if (lower.includes("linux")) return "linux";
+function detectPlatform(): HostPlatform {
+  if (Platform.isMacOS) return "macos";
+  if (Platform.isWin) return "windows";
+  if (Platform.isLinux) return "linux";
   return "unknown";
 }
 
@@ -39,9 +37,8 @@ async function copyToClipboard(text: string): Promise<boolean> {
   }
   try {
     const ta = document.createElement("textarea");
+    ta.className = "worktable-clipboard-fallback";
     ta.value = text;
-    ta.style.position = "fixed";
-    ta.style.opacity = "0";
     document.body.appendChild(ta);
     ta.select();
     const ok = document.execCommand("copy");
@@ -74,7 +71,7 @@ function makeCopyableCode(parent: HTMLElement, text: string, copiedLabel: string
 }
 
 /** Render the platform-specific install instructions into `container`. */
-function renderInstructions(container: HTMLElement, t: SettingsStrings, platform: Platform): void {
+function renderInstructions(container: HTMLElement, t: SettingsStrings, platform: HostPlatform): void {
   if (platform === "macos") {
     container.createEl("p", {
       cls: "worktable-setup-subtitle",

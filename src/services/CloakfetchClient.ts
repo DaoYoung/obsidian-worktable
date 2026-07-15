@@ -349,7 +349,7 @@ async function readTokenFromDisk(): Promise<string> {
   try {
     // Lazy require so this module is safe to import in non-Node environments.
     // Obsidian's plugin runtime is desktop-only and always has node modules.
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-var-requires -- node-only runtime, required lazily
     const fs = require("node:fs") as typeof import("node:fs");
     for (const p of resolveServerConfigPaths()) {
       try {

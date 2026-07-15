@@ -392,6 +392,12 @@
   margin: 4px 0 8px 0;
 }
 
+.worktable-clipboard-fallback {
+  position: fixed;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .worktable-cmd {
   margin: 0;
   padding: 8px 10px;

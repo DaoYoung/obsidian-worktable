@@ -2,7 +2,7 @@
   "id": "worktable",
   "name": "worktable",
   "version": "0.3.3",
-  "minAppVersion": "1.4.5",
+  "minAppVersion": "1.5.0",
   "description": "A native dashboard for focus, tasks, learning, review, and news.",
   "author": "DaoYoung",
   "authorUrl": "https://github.com/DaoYoung",

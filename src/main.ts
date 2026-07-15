@@ -50,7 +50,6 @@ export default class ObsidianWorktablePlugin extends Plugin {
   }
 
   onunload(): void {
-    this.app.workspace.detachLeavesOfType(WORKTABLE_VIEW_TYPE);
     setCloakfetchDefaultSettings(null);
   }
 
