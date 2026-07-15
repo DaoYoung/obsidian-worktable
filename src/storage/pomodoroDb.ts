@@ -35,6 +35,42 @@ export interface PomDb {
   deduplicateSessions(): Promise<void>;
 }
 
+/**
+ * Pure helper — exports for unit testing.
+ * Bucket records by (type, duration), then within each bucket cluster records
+ * whose consecutive `completedAt` gaps fall within `windowMs`. The earliest
+ * record of each cluster is kept; every later record within the same cluster
+ * is flagged for deletion. Exported so we can unit-test it without IndexedDB.
+ */
+export function findDuplicateIds(records: PomSession[], windowMs = 5000): Set<number> {
+  const toDelete = new Set<number>();
+  const byKey = new Map<string, PomSession[]>();
+  for (const rec of records) {
+    const key = `${rec.type}|${rec.duration}`;
+    const list = byKey.get(key);
+    if (list) list.push(rec);
+    else byKey.set(key, [rec]);
+  }
+  for (const list of byKey.values()) {
+    if (list.length < 2) continue;
+    list.sort(
+      (a, b) =>
+        (a.completedAt ?? 0) - (b.completedAt ?? 0) || (a.id ?? 0) - (b.id ?? 0),
+    );
+    for (let i = 1; i < list.length; i++) {
+      const prev = list[i - 1];
+      const cur = list[i];
+      if (!prev || !cur) continue;
+      if (cur.completedAt - prev.completedAt < windowMs) {
+        // Adjacent within window → part of the same cluster. Drop the later one.
+        if (cur.id != null) toDelete.add(cur.id);
+      }
+      // Else: this is the start of a new cluster; the previous record is its anchor.
+    }
+  }
+  return toDelete;
+}
+
 const DB_NAME = "pomodoro-db";
 const DB_VERSION = 1;
 
@@ -60,31 +96,41 @@ export function createPomDb(): PomDb {
 
   async function addSession(rec: Omit<PomSession, "id">): Promise<void> {
     const db = await open();
-    // Inline dedup guard. Without this, multiple widget instances (e.g. the
-    // Worktable view open in two panes) or a finish() race can each call
-    // addSession() for the same session transition, producing 2–3 copies of
-    // the same record in the history. Checking here keeps the history clean
-    // in real time instead of waiting for the next mount-time sweep
-    // (deduplicateSessions).
-    const existing = await new Promise<PomSession[]>((resolve, reject) => {
-      const tx = db.transaction("sessions", "readonly");
-      const req = tx.objectStore("sessions").getAll();
-      req.onsuccess = () => resolve(req.result || []);
-      req.onerror = () => reject(req.error);
-    });
-    const isDup = existing.some(
-      (s) =>
-        s.type === rec.type &&
-        s.duration === rec.duration &&
-        Math.abs((s.completedAt ?? 0) - rec.completedAt) < 5000,
-    );
-    if (isDup) return;
-
+    // Atomic check-and-insert. The previous implementation read in one
+    // transaction and wrote in another, leaving a window where two
+    // concurrent addSession() calls (e.g. two Worktable panes, or a
+    // finish()-mid-await + a hot-reload re-entry) could both pass the dup
+    // guard and both insert. IndexedDB serializes readwrite transactions
+    // per store, so doing the index lookup and the add inside the same tx
+    // closes that window.
     return new Promise((resolve, reject) => {
       const tx = db.transaction("sessions", "readwrite");
+      const store = tx.objectStore("sessions");
+      const idx = store.index("completedAt");
+      const range = IDBKeyRange.bound(rec.completedAt - 5000, rec.completedAt + 5000);
+      let isDup = false;
+      const cursorReq = idx.openCursor(range);
+      cursorReq.onsuccess = (e) => {
+        const cursor = (e.target as IDBRequest<IDBCursorWithValue>).result;
+        if (cursor) {
+          const s = cursor.value;
+          if (
+            s.type === rec.type &&
+            s.duration === rec.duration &&
+            Math.abs((s.completedAt ?? 0) - rec.completedAt) < 5000
+          ) {
+            isDup = true;
+            return; // skip remaining cursors; tx completes empty
+          }
+          cursor.continue();
+        } else if (!isDup) {
+          store.add(rec);
+        }
+      };
+      cursorReq.onerror = () => reject(cursorReq.error);
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
-      tx.objectStore("sessions").add(rec);
+      tx.onabort = () => reject(tx.error);
     });
   }
 
@@ -184,24 +230,10 @@ export function createPomDb(): PomDb {
       req.onsuccess = () => {
         const all: PomSession[] = req.result || [];
         if (all.length < 2) return;
-        // Sort by completedAt ascending so a linear scan finds near-duplicates.
-        all.sort((a, b) => (a.completedAt ?? 0) - (b.completedAt ?? 0) || (a.id ?? 0) - (b.id ?? 0));
-        const toDelete = new Set<number>();
-        let prev: PomSession | null = null;
-        for (const rec of all) {
-          if (rec.id == null) continue;
-          if (
-            prev &&
-            prev.type === rec.type &&
-            prev.duration === rec.duration &&
-            rec.completedAt - prev.completedAt < 5000
-          ) {
-            // Keep the earlier one, mark the later one for deletion.
-            toDelete.add(rec.id);
-          } else {
-            prev = rec;
-          }
-        }
+        // Use the bucket-based cluster finder. Unlike the previous
+        // adjacent-only scan, this catches interleaved duplicates like
+        // [A-dup, B-different, A-dup] where A's two copies are not adjacent.
+        const toDelete = findDuplicateIds(all);
         for (const id of toDelete) {
           store.delete(id);
         }
