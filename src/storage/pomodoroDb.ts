@@ -36,11 +36,43 @@ export interface PomDb {
 }
 
 /**
+ * Two records are considered duplicates of each other (same logical session)
+ * if their completedAt is within `windowMs` OR their startedAt is within
+ * `startWindowMs`. The `completedAt` window catches closely-spaced writes
+ * (concurrent calls, hot-reload races); the `startedAt` window catches
+ * phantom records created minutes apart by repeated hot reloads — they all
+ * share the original session's startedAt but their completedAt drifts.
+ *
+ * The default startWindow is 120_000 ms (2 min): legitimate same-signature
+ * sessions are at least 25 min apart (work + auto break), so any two records
+ * whose startedAt is within 2 min are clearly the same session even if their
+ * completedAt drifted arbitrarily. The 5 s completedAt window catches
+ * high-frequency duplicates (e.g. concurrent addSession).
+ */
+export function areDuplicateSessions(
+  a: PomSession,
+  b: PomSession,
+  windowMs = 5000,
+  startWindowMs = 120_000,
+): boolean {
+  if (a.type !== b.type || a.duration !== b.duration) return false;
+  if (Math.abs((a.completedAt ?? 0) - (b.completedAt ?? 0)) < windowMs) return true;
+  if (Math.abs((a.startedAt ?? 0) - (b.startedAt ?? 0)) < startWindowMs) return true;
+  return false;
+}
+
+/**
  * Pure helper — exports for unit testing.
- * Bucket records by (type, duration), then within each bucket cluster records
- * whose consecutive `completedAt` gaps fall within `windowMs`. The earliest
- * record of each cluster is kept; every later record within the same cluster
- * is flagged for deletion. Exported so we can unit-test it without IndexedDB.
+ * Bucket records by (type, duration), then within each bucket walk sorted
+ * by completedAt and grow a cluster as long as the next record is a duplicate
+ * of ANY record already in the cluster. Within a cluster of size > 1, keep
+ * the earliest record (by completedAt) and flag every later record for
+ * deletion. This handles transitive duplicates: when 4 phantoms share a
+ * startedAt with 30s gaps, rec1↔rec2, rec2↔rec3, rec3↔rec4 chains them
+ * into one cluster even when rec1↔rec4 alone exceeds the window.
+ *
+ * O(n²) per bucket in the worst case, but typical IDB records number in
+ * the hundreds and bucket sizes are tiny, so this is fine in practice.
  */
 export function findDuplicateIds(records: PomSession[], windowMs = 5000): Set<number> {
   const toDelete = new Set<number>();
@@ -57,15 +89,24 @@ export function findDuplicateIds(records: PomSession[], windowMs = 5000): Set<nu
       (a, b) =>
         (a.completedAt ?? 0) - (b.completedAt ?? 0) || (a.id ?? 0) - (b.id ?? 0),
     );
-    for (let i = 1; i < list.length; i++) {
-      const prev = list[i - 1];
-      const cur = list[i];
-      if (!prev || !cur) continue;
-      if (cur.completedAt - prev.completedAt < windowMs) {
-        // Adjacent within window → part of the same cluster. Drop the later one.
-        if (cur.id != null) toDelete.add(cur.id);
+    // Build maximal clusters greedily: a record joins the current cluster iff
+    // it's a duplicate of at least one member of that cluster (transitively).
+    const clusters: PomSession[][] = [];
+    for (const rec of list) {
+      const last = clusters[clusters.length - 1];
+      if (last && last.some((m) => areDuplicateSessions(m, rec, windowMs))) {
+        last.push(rec);
+      } else {
+        clusters.push([rec]);
       }
-      // Else: this is the start of a new cluster; the previous record is its anchor.
+    }
+    for (const cluster of clusters) {
+      if (cluster.length < 2) continue;
+      // cluster[0] is the earliest (after sort); it survives.
+      for (let i = 1; i < cluster.length; i++) {
+        const dup = cluster[i];
+        if (dup?.id != null) toDelete.add(dup.id);
+      }
     }
   }
   return toDelete;

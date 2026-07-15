@@ -113,13 +113,16 @@ describe("findDuplicateIds", () => {
     expect(out.size).toBe(1);
   });
 
-  it("respects a custom window", () => {
+  it("respects a custom completedAt window when startedAt is also far apart", () => {
+    // Records spaced 200s in BOTH completedAt and startedAt — well outside
+    // any reasonable window. Verifies the windowMs parameter is honored.
+    const t0 = 1_700_000_000_000;
     const records = [
-      rec(1, "work", 1500, 1000),
-      rec(2, "work", 1500, 4000),    // 3s later
+      rec(1, "work", 1500, t0),
+      rec(2, "work", 1500, t0 + 200_000),
     ];
-    expect(findDuplicateIds(records, 2000).size).toBe(0);
-    expect(findDuplicateIds(records, 5000).has(2)).toBe(true);
+    expect(findDuplicateIds(records, 1_000).size).toBe(0);
+    expect(findDuplicateIds(records, 250_000).has(2)).toBe(true);
   });
 
   it("reproduces the user's 'same time, multiple records' pattern", () => {
@@ -138,5 +141,37 @@ describe("findDuplicateIds", () => {
     for (const id of [11, 12, 13, 14]) {
       expect(out.has(id)).toBe(true);
     }
+  });
+
+  it("catches phantom records spaced minutes apart via shared startedAt", () => {
+    // Real-world pattern after multiple hot-reloads during a paused timer:
+    // each phantom share the original session's startedAt (T0) but their
+    // completedAt drifts by minutes. The 5s completedAt window alone
+    // misses these; the 2-minute startedAt window catches them.
+    const T0 = 1_700_000_000_000;
+    const records = [
+      rec(1, "work", 1500, T0 + 1500),          // legitimate (T0+25min)
+      rec(2, "work", 1500, T0 + 1500 + 30_000),  // phantom 30s later (same T0)
+      rec(3, "work", 1500, T0 + 1500 + 90_000),  // phantom 90s later (same T0)
+      rec(4, "work", 1500, T0 + 1500 + 180_000), // phantom 3 min later (same T0)
+    ];
+    const out = findDuplicateIds(records);
+    expect(out.has(1)).toBe(false); // real record survives
+    for (const id of [2, 3, 4]) {
+      expect(out.has(id)).toBe(true);
+    }
+  });
+
+  it("does NOT cross-merge legitimate back-to-back same-signature sessions", () => {
+    // Real session A finishes, then real session B starts 25 min later.
+    // Their completedAt AND startedAt are both 25 min apart — well outside
+    // both windows — so neither should be flagged.
+    const T0 = 1_700_000_000_000;
+    const TWENTY_FIVE_MIN = 25 * 60 * 1000;
+    const records = [
+      rec(1, "work", TWENTY_FIVE_MIN, T0 + TWENTY_FIVE_MIN),
+      rec(2, "work", TWENTY_FIVE_MIN, T0 + TWENTY_FIVE_MIN + TWENTY_FIVE_MIN),
+    ];
+    expect(findDuplicateIds(records).size).toBe(0);
   });
 });
