@@ -72,8 +72,10 @@ function loadState(): PomState {
   // can hit 继续 when ready. The on/off state is remembered (mode,
   // duration, remaining time), but the clock does not run until the user
   // asks it to.
-  if (s.running && s.endsAt) {
-    s.pausedRemain = Math.max(0, Math.round((s.endsAt - Date.now()) / 1000));
+  if (s.running) {
+    if (s.endsAt) {
+      s.pausedRemain = Math.max(0, Math.round((s.endsAt - Date.now()) / 1000));
+    }
     s.endsAt = null;
     s.running = false;
   }
@@ -414,7 +416,11 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
 
   function tick(): void {
     if (!state.running || _finishing) return;
-    const remaining = Math.max(0, Math.round((state.endsAt! - Date.now()) / 1000));
+    if (state.endsAt == null) {
+      state.running = false;
+      return;
+    }
+    const remaining = Math.max(0, Math.round((state.endsAt - Date.now()) / 1000));
     if (remaining <= 0) {
       void finish();
       return;

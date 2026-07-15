@@ -1,6 +1,6 @@
 /* ===========================================================================
    Obsidian Worktable — Built Styles
-   Generated: 2026-07-15T06-58-01
+   Generated: 2026-07-15T08-45-20
    Sources:
  *  - src/styles/base.css
  *  - src/styles/productivity.css
@@ -2022,6 +2022,10 @@
 
 .worktable .home-review-solo {
   margin: 0;
+}
+
+.worktable .home-recall-review-slot .home-review-solo {
+  margin-top: 12px;
 }
 
 .worktable .home-review-head {
