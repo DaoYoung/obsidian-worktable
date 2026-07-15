@@ -29,6 +29,7 @@ jobs:
         run: npm run verify
 
       - name: Validate tag version
+        id: validate
         shell: bash
         run: |
           VERSION=$(node -p "require('./manifest.json').version")
@@ -36,9 +37,10 @@ jobs:
             echo "Tag $GITHUB_REF_NAME does not match manifest version $VERSION" >&2
             exit 1
           fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Create manual-install archive
-        run: zip -j obsidian-worktable.zip main.js manifest.json styles.css
+        run: zip -j "obsidian-worktable-${{ steps.validate.outputs.version }}.zip" main.js manifest.json styles.css
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -51,6 +53,6 @@ jobs:
             main.js
             manifest.json
             styles.css
-            obsidian-worktable.zip
+            obsidian-worktable-${{ steps.validate.outputs.version }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
