@@ -304,6 +304,86 @@ function appendUpdateLog(sections: KnowledgeSection[], row: string): void {
   sections[idx] = appendTableRow(section, row);
 }
 
+/**
+ * Drop any existing entry whose name matches `name` (case-insensitive, trimmed)
+ * across all categories before the new write lands. The update-log section is
+ * left intact so the audit history is preserved.
+ */
+function dedupeNameAcrossSections(sections: KnowledgeSection[], name: string): void {
+  const target = name.trim().toLowerCase();
+  if (!target) return;
+  for (let i = 0; i < sections.length; i++) {
+    const sec = sections[i];
+    if (!sec) continue;
+    const firstLine = sec.text.split("\n")[0] || "";
+    const titleMatch = firstLine.match(/^##\s+(.+?)\s*$/);
+    const title = (titleMatch?.[1] || "").trim();
+    if (H2_WORDS_PATTERN.test(`## ${title}`)) {
+      sec.text = removeMatchingWordTableRow(sec.text, target);
+    } else if (H2_MATH_PATTERN.test(`## ${title}`)) {
+      sec.text = removeMatchingNumberedBlock(sec.text, target, /^\d+\.\d+\s+/);
+    } else if (/^更新记录$/.test(title) || /(?:三|末)、更新记录/.test(title)) {
+      // Preserve the audit log; the caller adds a fresh row for the new entry.
+    } else if (/^(?:三|四)、随手记$/.test(title) || title === "随手记") {
+      sec.text = removeMatchingNumberedBlock(sec.text, target, /^\d{4}-\d{2}-\d{2}\s+/);
+    } else if (title) {
+      // Generic subject section (e.g. ## 物理) — same numbered-block shape as math.
+      sec.text = removeMatchingNumberedBlock(sec.text, target, /^\d+\.\d+\s+/);
+    }
+  }
+}
+
+/** Remove `| <name> | ... |` rows from any table inside the words section. */
+function removeMatchingWordTableRow(text: string, targetLower: string): string {
+  const lines = text.split("\n");
+  const out: string[] = [];
+  let removed = false;
+  for (const line of lines) {
+    const cellMatch = line.match(/^\|\s*([^|]+?)\s*\|/);
+    if (cellMatch) {
+      const cellName = (cellMatch[1] || "").trim();
+      if (cellName && cellName.toLowerCase() === targetLower) {
+        removed = true;
+        continue;
+      }
+    }
+    out.push(line);
+  }
+  if (removed) {
+    while (out.length > 0 && (out[out.length - 1] ?? "").trim() === "") out.pop();
+  }
+  return out.join("\n");
+}
+
+/** Remove a `### <prefix><name>` block (heading + body) from a math/subject/misc section. */
+function removeMatchingNumberedBlock(text: string, targetLower: string, prefixRe: RegExp): string {
+  const lines = text.split("\n");
+  const out: string[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i] || "";
+    const h = line.match(/^###\s+(.+?)\s*$/);
+    let matched = false;
+    if (h && h[1] && prefixRe.test(h[1])) {
+      const namePart = h[1].replace(prefixRe, "").trim();
+      if (namePart.toLowerCase() === targetLower) matched = true;
+    }
+    if (matched) {
+      i++; // skip the heading itself
+      while (i < lines.length) {
+        const l = lines[i] || "";
+        if (/^#{2,3}\s/.test(l)) break;
+        i++;
+      }
+      while (out.length > 0 && (out[out.length - 1] ?? "").trim() === "") out.pop();
+      continue;
+    }
+    out.push(line);
+    i++;
+  }
+  return out.join("\n");
+}
+
 function escapeRegex(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -423,6 +503,8 @@ export function reorganizeKpFileWithOptions(text: string, opts: KnowledgeAppendO
   const { pre, sections } = splitSections(text || "");
   const finalSections = sections.map((s) => ({ text: s.text }));
 
+  dedupeNameAcrossSections(finalSections, opts.name);
+
   if (opts.category === "word") {
     const wordSecIdx = findSection(finalSections, H2_WORDS_PATTERN);
     if (wordSecIdx < 0) {
@@ -521,6 +603,8 @@ function fallbackMisc(text: string, opts: KnowledgeAppendOptions): ReorganizeRes
   const fallbackOpts: KnowledgeAppendOptions = { ...opts, category: "misc", subject: undefined };
   const { pre, sections } = splitSections(text || "");
   const finalSections = sections.map((s) => ({ text: s.text }));
+  // Match the dedup that reorganizeKpFileWithOptions applies on the parent path.
+  dedupeNameAcrossSections(finalSections, opts.name);
   const result = appendMisc(finalSections, pre, fallbackOpts);
   appendUpdateLog(
     result.sections,

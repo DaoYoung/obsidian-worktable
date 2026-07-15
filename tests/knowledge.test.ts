@@ -451,3 +451,194 @@ describe("KnowledgeService - parseKnowledgeMd - subject sections", () => {
     for (const s of out.subjects) expect(s.id.startsWith("s")).toBe(true);
   });
 });
+
+describe("KnowledgeService - dedup-by-name across categories", () => {
+  const baseSeed = [
+    "# Knowledge",
+    "",
+    "## 一、英文词汇",
+    "",
+    "### 1.1 名词（n.）",
+    "",
+    "| 单词 | 释义 |",
+    "|:----:|------|",
+    "| alpha | 旧版名词释义 |",
+    "| spawned | spawned 不应被 sp 误删 |",
+    "",
+    "### 1.2 动词（v.）",
+    "",
+    "| 单词 | 释义 |",
+    "|:----:|------|",
+    "",
+    "## 二、数学知识点",
+    "",
+    "### 1.1 牛顿第一定律",
+    "",
+    "OLDINSTEXT-惯性定律原始旧版内容。",
+    "",
+    "### 1.2 牛顿第二定律",
+    "",
+    "F=ma。",
+    "",
+    "## 三、更新记录",
+    "",
+    "| 日期 | 内容 |",
+    "|:----:|------|",
+    "| 2026-07-01 10:00 | 新增 **spawn** · 随手记 |",
+    "| 2026-07-02 11:00 | 新增 **alpha** · 英文词汇 |",
+    "",
+  ].join("\n");
+
+  it("removes a word-row match before re-adding the same word", () => {
+    const { text } = reorganizeKpFileWithOptions(baseSeed, {
+      category: "word",
+      name: "alpha",
+      content: "alpha (n.) 新版名词释义",
+    });
+    expect(text).toContain("| alpha | 新版名词释义 |");
+    expect(text).not.toContain("旧版名词释义");
+    // 单次 row,没有重复
+    const alphaRows = text.split("\n").filter((l) => /^\|\s*alpha\s*\|/.test(l));
+    expect(alphaRows.length).toBe(1);
+  });
+
+  it("removes a math-block match before re-adding the same name", () => {
+    const { text } = reorganizeKpFileWithOptions(baseSeed, {
+      category: "math",
+      name: "牛顿第一定律",
+      content: "NEWINSTEXT-惯性定律更新版内容。",
+    });
+    expect(text).toContain("### ");
+    expect(text).toContain("NEWINSTEXT-惯性定律更新版内容");
+    expect(text).not.toContain("OLDINSTEXT");
+    // 旧块完整消失,更新记录保留两条历史
+    expect(text).not.toMatch(/### \d+\.\d+ 牛顿第一定律[\s\S]*?OLDINSTEXT/);
+    expect(text).toContain("新增 **alpha** · 英文词汇");
+  });
+
+  it("removes a subject-block match before re-adding under a different category", () => {
+    const subjectSeed = [
+      "# Knowledge",
+      "",
+      "## 一、英文词汇",
+      "",
+      "### 1.2 动词（v.）",
+      "",
+      "| 单词 | 释义 |",
+      "|:----:|------|",
+      "",
+      "## 物理",
+      "",
+      "### 1.1 spawn",
+      "",
+      "SUBJOLD-把进程生成当成 spawn 的旧释义。",
+      "",
+    ].join("\n");
+    const { text } = reorganizeKpFileWithOptions(subjectSeed, {
+      category: "word",
+      name: "spawn",
+      content: "spawn (n.) SUBJNEW-新版词汇释义",
+    });
+    // 旧 subject 块必须没了
+    expect(text).not.toContain("SUBJOLD");
+    expect(text).not.toMatch(/^### \d+\.\d+ spawn$/m);
+    // 新 word 行落进英文词汇
+    expect(text).toContain("| spawn | SUBJNEW-新版词汇释义 |");
+  });
+
+  it("removes a misc-block match (date-prefixed heading)", () => {
+    const miscSeed = [
+      "# Knowledge",
+      "",
+      "## 一、英文词汇",
+      "",
+      "### 1.2 动词（v.）",
+      "",
+      "| 单词 | 释义 |",
+      "|:----:|------|",
+      "",
+      "## 四、随手记",
+      "",
+      "### 2026-07-10 spawn",
+      "",
+      "MISCOLD-老的一条关于 spawn 的随手记。",
+      "",
+    ].join("\n");
+    const { text } = reorganizeKpFileWithOptions(miscSeed, {
+      category: "word",
+      name: "spawn",
+      content: "spawn (n.) MISCNEW-新版",
+    });
+    expect(text).not.toContain("MISCOLD");
+    expect(text).not.toContain("2026-07-10 spawn");
+    expect(text).toContain("| spawn | MISCNEW-新版 |");
+  });
+
+  it("does not match partial substrings (sp does not remove spawned)", () => {
+    const { text } = reorganizeKpFileWithOptions(baseSeed, {
+      category: "word",
+      name: "sp",
+      content: "sp (n.) 这个不是已存在的词",
+    });
+    // spawned 行必须还在,sp 行被当作全新加入
+    expect(text).toContain("| spawned | spawned 不应被 sp 误删 |");
+    expect(text).toContain("| sp | 这个不是已存在的词 |");
+  });
+
+  it("matches case-insensitively (Spawn re-added finds Spawn block)", () => {
+    const subjectSeed = [
+      "# Knowledge",
+      "",
+      "## 物理",
+      "",
+      "### 1.1 Spawn",
+      "",
+      "首字母大写的旧条目。",
+      "",
+    ].join("\n");
+    const { text } = reorganizeKpFileWithOptions(subjectSeed, {
+      category: "subject",
+      name: "spawn",
+      content: "新版小写 spawn。",
+      subject: "物理",
+    });
+    expect(text).not.toContain("首字母大写的旧条目");
+    expect(text).toContain("新版小写 spawn");
+  });
+
+  it("preserves the update-log history (does not touch audit rows)", () => {
+    const { text } = reorganizeKpFileWithOptions(baseSeed, {
+      category: "word",
+      name: "alpha",
+      content: "alpha (n.) 新版",
+    });
+    // 日志里老的两行必须都在,新的会再加一行
+    expect(text).toContain("新增 **spawn** · 随手记");
+    expect(text).toContain("新增 **alpha** · 英文词汇");
+    // 历史 + 新增共两条 alpha 日志行
+    const alphaLogLines = text
+      .split("\n")
+      .filter((l) => /新增 \*\*alpha\*\*/.test(l));
+    expect(alphaLogLines.length).toBeGreaterThanOrEqual(2);
+    // 更新记录 section 还在且包含历史
+    expect(text).toContain("## 三、更新记录");
+    expect(text).toContain("| 2026-07-02 11:00 | 新增 **alpha** · 英文词汇 |");
+  });
+
+  it("is a no-op when the name does not exist anywhere", () => {
+    const before = baseSeed;
+    const { text } = reorganizeKpFileWithOptions(before, {
+      category: "math",
+      name: "完全不存在的新条目",
+      content: "全新内容。",
+    });
+    // 原条目 alpha / spawned / 牛顿第一定律 / 牛顿第二定律 / 日志两行全部还在
+    expect(text).toContain("| alpha | 旧版名词释义 |");
+    expect(text).toContain("| spawned | spawned 不应被 sp 误删 |");
+    expect(text).toContain("### 1.1 牛顿第一定律");
+    expect(text).toContain("### 1.2 牛顿第二定律");
+    expect(text).toContain("新增 **alpha** · 英文词汇");
+    // 新条目按 maxN+1 入册
+    expect(text).toMatch(/### \d+\.\d+ 完全不存在的新条目/);
+  });
+});
