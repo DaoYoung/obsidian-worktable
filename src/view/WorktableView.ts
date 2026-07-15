@@ -138,13 +138,14 @@ export class WorktableView extends ItemView {
   }
 
   private buildSections(grid: HTMLElement): SectionContainer[] {
-    const layouts: Array<{ id: WidgetId; title: string; row: "top" | "mid" | "bottom" }> = [
+    const layouts: Array<{ id: WidgetId; title?: string; row: "top" | "mid" | "bottom" }> = [
       { id: "pomodoro", title: "🍅 番茄钟", row: "top" },
       { id: "todo", title: "✅ 任务清单", row: "top" },
       { id: "inquiry", title: "🌱 探究性学习", row: "mid" },
       // flowers 移到 inquiry 顶部右侧的 slot（见 mountWidget 特殊处理）
       { id: "active-recall", title: "🧠 主动回忆学习", row: "mid" },
-      { id: "review", title: "🎓 今日复习", row: "bottom" },
+      // review 不渲染 cell title,让 review widget 自带的 "📅 今日复习 · 日期" 充当标题
+      { id: "review", row: "bottom" },
       { id: "news", title: "📰 新闻", row: "bottom" },
     ];
 
@@ -156,11 +157,13 @@ export class WorktableView extends ItemView {
         rowMap[layout.row] = row;
       }
       const wrapper = row.createDiv({ cls: `worktable-cell worktable-cell-${layout.id}` });
-      wrapper.createDiv({ cls: "worktable-cell-title", text: layout.title });
+      if (layout.title) {
+        wrapper.createDiv({ cls: "worktable-cell-title", text: layout.title });
+      }
       const widgetEl = wrapper.createDiv({ cls: "worktable-cell-body" });
       const errorEl = wrapper.createDiv({ cls: "worktable-cell-error" });
       errorEl.hide();
-      this.sections.push({ id: layout.id, title: layout.title, widgetEl, errorEl });
+      this.sections.push({ id: layout.id, title: layout.title ?? "", widgetEl, errorEl });
     }
     return this.sections;
   }
