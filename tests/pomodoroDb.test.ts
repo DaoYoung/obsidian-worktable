@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { findDuplicateIds, type PomSession } from "../src/storage/pomodoroDb";
+import { findDuplicateIds, computeStats, type PomSession } from "../src/storage/pomodoroDb";
 
 function rec(id: number, type: string, duration: number, completedAt: number): PomSession {
   return {
@@ -24,6 +24,15 @@ function rec(id: number, type: string, duration: number, completedAt: number): P
     completedAt,
     date: new Date(completedAt).toISOString().slice(0, 10),
   };
+}
+
+function datedRec(
+  id: number,
+  type: string,
+  duration: number,
+  date: string,
+): PomSession {
+  return { id, type, duration, startedAt: 0, completedAt: 0, date };
 }
 
 describe("findDuplicateIds", () => {
@@ -173,5 +182,69 @@ describe("findDuplicateIds", () => {
       rec(2, "work", TWENTY_FIVE_MIN, T0 + TWENTY_FIVE_MIN + TWENTY_FIVE_MIN),
     ];
     expect(findDuplicateIds(records).size).toBe(0);
+  });
+});
+
+describe("computeStats (excluding today from averages)", () => {
+  const TODAY = "2026-07-15";
+  const YESTERDAY = "2026-07-14";
+  const TWO_DAYS_AGO = "2026-07-13";
+
+  it("counts today's records separately and never mixes them into the averages", () => {
+    const records: PomSession[] = [
+      // Today: 3 work sessions, 1 short break (sums focus + break for today).
+      datedRec(1, "work", 1500, TODAY),
+      datedRec(2, "work", 1500, TODAY),
+      datedRec(3, "work", 1500, TODAY),
+      datedRec(4, "short", 300, TODAY),
+      // Yesterday: 2 work sessions, 0 breaks.
+      datedRec(5, "work", 1500, YESTERDAY),
+      datedRec(6, "work", 1500, YESTERDAY),
+      // Two days ago: 1 work + 1 long break.
+      datedRec(7, "work", 1500, TWO_DAYS_AGO),
+      datedRec(8, "long", 900, TWO_DAYS_AGO),
+    ];
+    const stats = computeStats(records, TODAY);
+    expect(stats.todayCount).toBe(3);
+    expect(stats.todayFocusSec).toBe(4500);
+    expect(stats.todayBreakSec).toBe(300);
+    // Past-only: 3 work sessions (across 2 days), 1 break (900s long).
+    expect(stats.focusCount).toBe(3);
+    expect(stats.focusTotalSec).toBe(4500);
+    expect(stats.breakTotalSec).toBe(900);
+    expect(stats.activeDays).toBe(2);
+    // Today's 3 work sessions are NOT counted toward the past total —
+    // otherwise daily averages would skew toward whatever the user did today.
+  });
+
+  it("returns zero past-totals when the only records are today's", () => {
+    const records: PomSession[] = [
+      datedRec(1, "work", 1500, TODAY),
+      datedRec(2, "short", 300, TODAY),
+    ];
+    const stats = computeStats(records, TODAY);
+    expect(stats.todayCount).toBe(1);
+    expect(stats.todayBreakSec).toBe(300);
+    expect(stats.focusCount).toBe(0);
+    expect(stats.focusTotalSec).toBe(0);
+    expect(stats.breakTotalSec).toBe(0);
+    expect(stats.activeDays).toBe(0);
+  });
+
+  it("returns empty stats for an empty record set", () => {
+    const stats = computeStats([], TODAY);
+    expect(stats.todayCount).toBe(0);
+    expect(stats.focusCount).toBe(0);
+    expect(stats.activeDays).toBe(0);
+  });
+
+  it("ignores records with no date field when computing active days", () => {
+    const records: PomSession[] = [
+      { id: 1, type: "work", duration: 1500, startedAt: 0, completedAt: 0, date: YESTERDAY },
+      { id: 2, type: "work", duration: 1500, startedAt: 0, completedAt: 0, date: "" }, // missing
+    ];
+    const stats = computeStats(records, TODAY);
+    expect(stats.focusCount).toBe(2);
+    expect(stats.activeDays).toBe(1); // empty-date record does not contribute a day
   });
 });

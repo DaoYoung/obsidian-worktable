@@ -15,13 +15,69 @@ export interface PomConfig {
 }
 
 export interface PomStats {
+  /** Today's work sessions (work-mode only) — drives 今日专注次数. */
   todayCount: number;
+  /** Today's focus seconds (work-mode only) — drives 今日专注时间. */
   todayFocusSec: number;
+  /** Today's break seconds (short + long) — drives 今日休息时间. */
   todayBreakSec: number;
+  /** Past-only work sessions count. Combined with activeDays to compute 日均次数. */
   focusCount: number;
+  /** Past-only focus seconds. Combined with activeDays to compute 日均专注时间. */
   focusTotalSec: number;
+  /** Past-only break seconds. Combined with activeDays to compute 日均休息时间. */
   breakTotalSec: number;
+  /** Past-only distinct active days. Drives the denominator of all 3 averages. */
   activeDays: number;
+}
+
+/**
+ * Pure helper — exported for unit testing.
+ * Reduces a list of session records + today's date key into PomStats.
+ *
+ * Three of the lifetime-style fields (focusCount / focusTotalSec / breakTotalSec)
+ * and activeDays deliberately EXCLUDE today. The 3 averages in the widget
+ * (日均次数 / 日均专注时间 / 日均休息时间) are stable "what a normal day looks like"
+ * numbers; including today would skew them toward whatever the user just did
+ * this morning. Today's numbers surface separately as
+ * todayCount / todayFocusSec / todayBreakSec.
+ */
+export function computeStats(records: PomSession[], today: string): PomStats {
+  let todayCount = 0;
+  let todayFocusSec = 0;
+  let todayBreakSec = 0;
+  let focusCount = 0;
+  let focusTotalSec = 0;
+  let breakTotalSec = 0;
+  const pastDates = new Set<string>();
+  for (const r of records) {
+    const isToday = r.date === today;
+    if (isToday) {
+      if (r.type === "work") {
+        todayCount += 1;
+        todayFocusSec += r.duration || 0;
+      } else if (r.type === "short" || r.type === "long") {
+        todayBreakSec += r.duration || 0;
+      }
+    } else {
+      if (r.type === "work") {
+        focusCount += 1;
+        focusTotalSec += r.duration || 0;
+      } else if (r.type === "short" || r.type === "long") {
+        breakTotalSec += r.duration || 0;
+      }
+      if (r.date) pastDates.add(r.date);
+    }
+  }
+  return {
+    todayCount,
+    todayFocusSec,
+    todayBreakSec,
+    focusCount,
+    focusTotalSec,
+    breakTotalSec,
+    activeDays: pastDates.size,
+  };
 }
 
 export interface PomDb {
@@ -201,36 +257,7 @@ export function createPomDb(): PomDb {
       req.onsuccess = () => {
         const all = req.result || [];
         const today = new Date().toISOString().slice(0, 10);
-        let todayCount = 0;
-        let todayFocusSec = 0;
-        let todayBreakSec = 0;
-        let focusCount = 0;
-        let focusTotalSec = 0;
-        let breakTotalSec = 0;
-        const dates = new Set<string>();
-        for (const r of all) {
-          if (r.type === "work") {
-            focusCount += 1;
-            focusTotalSec += r.duration || 0;
-            if (r.date === today) {
-              todayCount += 1;
-              todayFocusSec += r.duration || 0;
-            }
-          } else if (r.type === "short" || r.type === "long") {
-            breakTotalSec += r.duration || 0;
-            if (r.date === today) todayBreakSec += r.duration || 0;
-          }
-          if (r.date) dates.add(r.date);
-        }
-        resolve({
-          todayCount,
-          todayFocusSec,
-          todayBreakSec,
-          focusCount,
-          focusTotalSec,
-          breakTotalSec,
-          activeDays: dates.size,
-        });
+        resolve(computeStats(all, today));
       };
       req.onerror = () => reject(req.error);
     });
