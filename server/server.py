@@ -585,6 +585,25 @@ def _unescape_newlines(s: str) -> str:
     return s.replace("\\n", "\n")
 
 
+# Heuristics for "this string looks like source code". We never want code in
+# the vocabulary learning path even if the model sneaks some in.
+_CODE_MARKERS = (
+    "```",       # fenced code block
+    "function ", "function(",
+    "const ", "let ", "var ",
+    "import ", "from ", "require(",
+    "def ", "class ",
+    "console.", "System.out",
+    "<script", "#!/",
+)
+
+
+def _looks_like_code(s: str) -> bool:
+    if not s:
+        return False
+    return any(marker in s for marker in _CODE_MARKERS)
+
+
 def _expand_knowledge_point(name: str, context: str = "") -> dict:
     """Ask the AI to organize a knowledge point.
 
@@ -623,16 +642,16 @@ def _expand_knowledge_point(name: str, context: str = "") -> dict:
         user = (
             f"英文单词:{name}\n\n"
             + (f"额外参考上下文:\n{snippet}\n\n" if snippet else "")
-            + "请用 JSON 返回这个英文单词的学习卡片（**只解释作为英文单词的含义,不要写任何代码**）:\n"
+            + "请用 JSON 返回这个英文单词的学习卡片(**只解释作为英文单词的含义,不要写任何代码、不要举编程/技术示例**):\n"
             + '  "subject": "英文词汇"\n'
-            + '  "translation": 1-3 句中文释义（必填,例如「产卵;大量产生;引发」这种常规英文词汇含义）\n'
-            + '  "pos": 词性（必填,n./v./adj./adv./prep./conj./pron./num./art./aux./interj.）\n'
-            + '  "definition": 1-2 句中文解释,告诉用户这个单词在英文里通常怎么用（不要写代码、不要解释技术用法）\n'
+            + '  "translation": 1-3 句中文释义(必填,例如「产卵;大量产生;引发」这种常规英文词汇含义)\n'
+            + '  "pos": 词性(必填,n./v./adj./adv./prep./conj./pron./num./art./aux./interj.)\n'
+            + '  "definition": 1-2 句中文解释,告诉用户这个单词在英文里通常怎么用(不要写代码、不要解释技术用法)\n'
             + '  "points": 3-5 条关键要点,每条都是中文,围绕单词本身的含义、常见搭配、近义词等\n'
-            + '  "example": 2 个英文例句,每个例句下方用括号附中文翻译;只写自然语言例句,绝不写代码\n'
-            + '  "contrast": 与意思相近的英文单词的区别（可选,可以空字符串）\n'
-            + '  "refs": 参考资料（可选,可以空字符串）\n\n'
-            + '{"subject":"英文词汇","translation":"...","pos":"...","definition":"...","points":["...","..."],"example":"...","contrast":"...","refs":"..."}\n'
+            + '  "example": 留空字符串 "" —— 英文单词场景下不需要示例字段\n'
+            + '  "contrast": 与意思相近的英文单词的区别(可选,可以空字符串)\n'
+            + '  "refs": 参考资料(可选,可以空字符串)\n\n'
+            + '{"subject":"英文词汇","translation":"...","pos":"...","definition":"...","points":["...","..."],"example":"","contrast":"...","refs":"..."}\n'
         )
     else:
         subject_hint = (
@@ -679,6 +698,12 @@ def _expand_knowledge_point(name: str, context: str = "") -> dict:
 
     obj = _try_json(raw)
     if obj and isinstance(obj, dict):
+        # For English-vocabulary learning the user explicitly does not want
+        # code samples — even if the model writes some. The prompt asks for
+        # example = "" and forbids code, but we also drop the example field
+        # server-side as a safety net. The same goes for the `contrast`
+        # field when it slipped into technical comparisons.
+        drop_examples = is_english_word
         parts = []
         defn = _unescape_newlines(str(obj.get("definition", ""))).strip()
         if defn:
@@ -692,11 +717,12 @@ def _expand_knowledge_point(name: str, context: str = "") -> dict:
             )
             if bullets:
                 parts.append(f"## 关键要点\n\n{bullets}\n")
-        example = _unescape_newlines(str(obj.get("example", ""))).strip()
-        if example:
-            parts.append(f"## 示例\n\n{example}\n")
+        if not drop_examples:
+            example = _unescape_newlines(str(obj.get("example", ""))).strip()
+            if example and not _looks_like_code(example):
+                parts.append(f"## 示例\n\n{example}\n")
         contrast = _unescape_newlines(str(obj.get("contrast", ""))).strip()
-        if contrast:
+        if contrast and not (drop_examples and _looks_like_code(contrast)):
             parts.append(f"## 易混淆 / 对比\n\n{contrast}\n")
         refs = _unescape_newlines(str(obj.get("refs", ""))).strip()
         if refs:

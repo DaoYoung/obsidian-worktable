@@ -73,16 +73,16 @@ export function knowledgeExpandPrompt(name: string, context: string): { system: 
     const user =
       `英文单词:${trimmedName}\n\n` +
       (snippet ? `额外参考上下文:\n${snippet}\n\n` : "") +
-      "请用 JSON 返回这个英文单词的学习卡片(只解释作为英文单词的含义,不要写任何代码):\n" +
+      "请用 JSON 返回这个英文单词的学习卡片(只解释作为英文单词的含义,不要写任何代码、不要举编程/技术示例):\n" +
       '  "subject": "英文词汇"\n' +
       '  "translation": 1-3 句中文释义(必填,例如「产卵;大量产生;引发」这种常规英文词汇含义)\n' +
       '  "pos": 词性(必填,n./v./adj./adv./prep./conj./pron./num./art./aux./interj.)\n' +
       '  "definition": 1-2 句中文解释,告诉用户这个单词在英文里通常怎么用(不要写代码、不要解释技术用法)\n' +
       '  "points": 3-5 条关键要点,每条都是中文,围绕单词本身的含义、常见搭配、近义词等\n' +
-      '  "example": 2 个英文例句,每个例句下方用括号附中文翻译;只写自然语言例句,绝不写代码\n' +
+      '  "example": 留空字符串 "" —— 英文单词场景下不需要示例字段\n' +
       '  "contrast": 与意思相近的英文单词的区别(可选,可以空字符串)\n' +
       '  "refs": 参考资料(可选,可以空字符串)\n\n' +
-      '{"subject":"英文词汇","translation":"...","pos":"...","definition":"...","points":["...","..."],"example":"...","contrast":"...","refs":"..."}\n';
+      '{"subject":"英文词汇","translation":"...","pos":"...","definition":"...","points":["...","..."],"example":"","contrast":"...","refs":"..."}\n';
     return { system, user };
   }
   const subjectHint =
