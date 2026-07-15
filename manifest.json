@@ -1,7 +1,7 @@
 {
   "id": "worktable",
   "name": "Obsidian Worktable",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "minAppVersion": "1.4.5",
   "description": "A native dashboard for focus, tasks, learning, review, and news.",
   "author": "DaoYoung",
