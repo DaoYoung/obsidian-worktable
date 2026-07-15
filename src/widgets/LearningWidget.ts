@@ -53,19 +53,26 @@ export function mountLearningWidget(containerEl: HTMLElement, context: WidgetCon
 
   const root = containerEl.createDiv({ cls: "home-learn" });
   const heading = root.createEl("h3");
-  heading.createSpan({ text: "🌱 学习模块" });
   const statusEl = heading.createSpan({ cls: "learn-status", text: "空闲" });
 
-  const fetchSection = section(root, "① 输入文章内容");
+  // 顶部 2:1 布局：左 ① 输入文章，右 小红花+归档（WorktableView 挂载到 slot）
+  const topRow = root.createDiv({ cls: "learn-top-row" });
+  const inputCol = topRow.createDiv({ cls: "learn-top-input" });
+  const flowersSlot = topRow.createDiv({
+    cls: "learn-top-flowers",
+    attr: { "data-flowers-slot": "" },
+  });
+
+  const fetchSection = section(inputCol, "① 输入文章内容");
   const fetchRow = fetchSection.createDiv({ cls: "learn-row" });
   const urlInput = fetchRow.createEl("input", { type: "url", placeholder: "https://example.com/article（可选 — 需要本地服务）" });
   const fetchButton = button(fetchRow, "📥 抓取");
-  const diagnoseButton = button(fetchRow, "🔍 诊断", "secondary");
+  const archiveTopButton = button(fetchRow, "📦 归档本次学习", "success compact");
+  archiveTopButton.hidden = true;
   const newRoundButton = button(fetchRow, "🗑️ 重置清空", "secondary");
+  newRoundButton.hidden = true;
   const archivedNotice = fetchSection.createDiv({ cls: "learn-archived-notice" });
   archivedNotice.hidden = true;
-  const diagnostics = fetchSection.createEl("pre", { cls: "learn-diagnostics" });
-  diagnostics.hidden = true;
 
   // Paste-text path is the zero-install fallback (no Cloakfetch service
   // required). Default to collapsed so the URL input stays the primary
@@ -83,29 +90,39 @@ export function mountLearningWidget(containerEl: HTMLElement, context: WidgetCon
   const pasteButton = button(pasteRow, "📋 处理粘贴文本", "secondary");
   const pasteClearButton = button(pasteRow, "清空", "secondary compact");
 
-  const articleSection = section(root, "② 原文与 AI 出题/重点");
-  articleSection.hidden = true;
-  const articleRow = articleSection.createDiv({ cls: "learn-row" });
-  const generateButton = button(articleRow, "🤖 AI 出题", "secondary");
-  const extractButton = button(articleRow, "🎯 AI 提取重点", "secondary");
-  const articleContext = articleSection.createDiv({ cls: "learn-context" });
-  const keyPointList = articleSection.createDiv({ cls: "kp-list" });
-  keyPointList.hidden = true;
-  const keyPointActions = articleSection.createDiv({ cls: "kp-actions" });
+  // ② + ③: 重点摘录 (左) 与 题目训练 (右) 拆为左右两列。
+  //    顶部保留 ① 输入文章 section (全宽)，底部保留 ⑤ 知识点 section (全宽)。
+  //    两列等高，超出最大高度时各自内部滚动。
+  //    渐进式呈现：① 输入 → 出现左右两列 → 点提取重点才出补充到知识库
+  //    → 点 AI 出题才出提交答案 → 点提交答案才出归档。
+  const learnSplit = root.createDiv({ cls: "learn-split" });
+  learnSplit.hidden = true;
+
+  // 左列：重点摘录（原文不再展示，已填充到粘贴正文输入框）
+  const leftCol = learnSplit.createDiv({ cls: "learn-col learn-col-left" });
+  leftCol.createDiv({ cls: "learn-col-h", text: "② 重点摘录" });
+  const extractRow = leftCol.createDiv({ cls: "learn-row" });
+  const extractButton = button(extractRow, "🎯 AI 提取重点", "secondary");
+  const leftScroll = leftCol.createDiv({ cls: "learn-col-scroll" });
+  const keyPointList = leftScroll.createDiv({ cls: "kp-list" });
+  const keyPointActions = leftScroll.createDiv({ cls: "kp-actions" });
   keyPointActions.hidden = true;
   const appendPointsButton = button(keyPointActions, "📥 补充到知识库", "success");
   const selectAllButton = button(keyPointActions, "全选", "secondary");
   const selectNoneButton = button(keyPointActions, "全不选", "secondary");
   const keyPointStatus = keyPointActions.createSpan({ cls: "kp-status" });
 
-  const questionSection = section(root, "③ 题目");
-  questionSection.hidden = true;
-  const questionList = questionSection.createDiv({ cls: "learn-question-list" });
-  const submitAllButton = button(questionSection, "📝 提交答案", "success compact");
+  // 右列：题目训练（提交/归档按交互逐步出现）
+  const rightCol = learnSplit.createDiv({ cls: "learn-col learn-col-right" });
+  rightCol.createDiv({ cls: "learn-col-h", text: "③ 题目训练" });
+  const generateRow = rightCol.createDiv({ cls: "learn-row" });
+  const generateButton = button(generateRow, "🤖 AI 出题", "secondary");
+  const rightScroll = rightCol.createDiv({ cls: "learn-col-scroll" });
+  const questionList = rightScroll.createDiv({ cls: "learn-question-list" });
+  const submitAllButton = button(rightScroll, "📝 提交答案", "success compact");
   submitAllButton.classList.add("learn-submit-all");
-  const archiveRow = questionSection.createDiv({ cls: "learn-row learn-archive-row" });
-  const archiveButton = button(archiveRow, "📦 归档本次学习", "success compact");
-  const archiveSummary = archiveRow.createSpan({ cls: "learn-archive-summary" });
+  submitAllButton.hidden = true;
+  const archiveSummary = rightScroll.createSpan({ cls: "learn-archive-summary" });
 
   const conceptSection = section(root, "⑤ 录入新知识点（无需抓取）");
   const conceptDescription = conceptSection.createDiv({ cls: "learn-description" });
@@ -184,6 +201,21 @@ export function mountLearningWidget(containerEl: HTMLElement, context: WidgetCon
     void app.workspace.openLinkText(knowledgePath.replace(/\.md$/i, ""), "/", true);
   };
 
+  // After a successful fetch/paste, the top section collapses from
+  // "input mode" to "loaded mode": URL input + fetch hide, the
+  // archive button surfaces, and the paste-area summary becomes "正文"
+  // with its action buttons hidden (text is now read-only context, not
+  // an editable input). resetRound() restores the original layout.
+  const setInputSectionLoaded = (loaded: boolean): void => {
+    urlInput.hidden = loaded;
+    fetchButton.hidden = loaded;
+    archiveTopButton.hidden = !loaded;
+    newRoundButton.hidden = !loaded;
+    pasteButton.hidden = loaded;
+    pasteClearButton.hidden = loaded;
+    pasteSummary.setText(loaded ? "正文" : "📋 粘贴正文（无需本地服务 · 点击展开）");
+  };
+
   listen(knowledgeLink, "click", (event) => {
     event.preventDefault();
     openKnowledge();
@@ -191,9 +223,6 @@ export function mountLearningWidget(containerEl: HTMLElement, context: WidgetCon
 
   listen(fetchButton, "click", () => {
     void runFetch();
-  });
-  listen(diagnoseButton, "click", () => {
-    void runDiagnostics();
   });
   listen(pasteButton, "click", () => {
     void runPaste();
@@ -213,7 +242,7 @@ export function mountLearningWidget(containerEl: HTMLElement, context: WidgetCon
   });
   listen(selectAllButton, "click", () => selectPoints(true));
   listen(selectNoneButton, "click", () => selectPoints(false));
-  listen(archiveButton, "click", () => {
+  listen(archiveTopButton, "click", () => {
     void archiveLearning();
   });
   listen(submitAllButton, "click", () => {
@@ -250,13 +279,18 @@ export function mountLearningWidget(containerEl: HTMLElement, context: WidgetCon
       state.url = url;
       state.title = article.title || url;
       state.article = article.text;
-      articleContext.setText(`${article.text.slice(0, 600)}${article.text.length > 600 ? "…" : ""}`);
-      articleSection.hidden = false;
-      questionSection.hidden = true;
+      // 内容填充到粘贴正文输入框（统一手动粘贴与 URL 抓取两条路径），
+      // 并展开折叠区，让用户能直接看到/编辑正文。
+      pasteTextarea.value = article.text;
+      pasteDetails.open = true;
+      learnSplit.hidden = false;
       questionList.empty();
       // Reset previous submission state when fetching a new article.
       state.lastAnswers = [];
       state.lastCorrect = [];
+      // Collapse the top section to "loaded mode": hide URL input + fetch,
+      // surface archive button. Reset will restore them.
+      setInputSectionLoaded(true);
       hideArchivedNotice();
       // Check whether this URL was already archived — inform the user so
       // they don't redo work that's already been recorded.
@@ -271,26 +305,9 @@ export function mountLearningWidget(containerEl: HTMLElement, context: WidgetCon
     } catch (error) {
       showError(error, "抓取失败");
       // Surface a hint that paste-text is the zero-install alternative.
-      diagnostics.hidden = false;
-      diagnostics.setText(
-        `${diagnostics.textContent ?? ""}\n\n提示:抓取失败时,直接粘贴正文到下方文本框,无需任何本地服务。`.trim(),
-      );
+      setStatus("抓取失败时,直接粘贴正文到下方文本框,无需任何本地服务。", "err");
     } finally {
       fetchButton.disabled = false;
-    }
-  }
-
-  async function runDiagnostics(): Promise<void> {
-    diagnostics.hidden = false;
-    diagnostics.setText("诊断中…");
-    diagnoseButton.disabled = true;
-    try {
-      const result = await client.diagnose(urlInput.value.trim() || undefined);
-      if (!disposed) diagnostics.setText(formatDiagnostic(result));
-    } catch (error) {
-      if (!disposed) diagnostics.setText(`诊断失败：${errorMessage(error)}`);
-    } finally {
-      diagnoseButton.disabled = false;
     }
   }
 
@@ -316,9 +333,12 @@ export function mountLearningWidget(containerEl: HTMLElement, context: WidgetCon
       state.url = "(粘贴)";
       state.title = title || "粘贴的文章";
       state.article = text;
-      articleContext.setText(`${text.slice(0, 600)}${text.length > 600 ? "…" : ""}`);
-      articleSection.hidden = false;
-      questionSection.hidden = true;
+      // Paste path: hide paste-action buttons and re-label the summary,
+      // but keep the URL/fetch row visible (paste doesn't go through fetch).
+      pasteButton.hidden = true;
+      pasteClearButton.hidden = true;
+      pasteSummary.setText("正文");
+      learnSplit.hidden = false;
       questionList.empty();
       setStatus(`已就绪 · ${text.length} 字`, "ok");
     } catch (error) {
@@ -346,7 +366,6 @@ export function mountLearningWidget(containerEl: HTMLElement, context: WidgetCon
       state.questions = questions;
       state.lastAnswers = questions.map(() => null);
       state.lastCorrect = questions.map(() => null);
-      questionSection.hidden = false;
       archiveSummary.setText("");
       renderAllQuestions();
       setStatus(`已生成 ${questions.length} 道题`, "ok");
@@ -402,10 +421,10 @@ export function mountLearningWidget(containerEl: HTMLElement, context: WidgetCon
       const explanation = card.createDiv({ cls: "learn-explanation" });
       explanation.hidden = true;
     });
+    submitAllButton.hidden = false;
     submitAllButton.disabled = false;
     submitAllButton.setText("📝 提交全部答案");
-    archiveButton.disabled = true;
-    archiveButton.setText("📦 归档本次学习");
+    archiveTopButton.setText("📦 归档本次学习");
     updateArchiveSummary();
   }
 
@@ -473,7 +492,6 @@ export function mountLearningWidget(containerEl: HTMLElement, context: WidgetCon
     });
     submitAllButton.disabled = true;
     submitAllButton.setText(`✓ 已提交 · 答对 ${correctCount}/${state.questions.length}`);
-    archiveButton.disabled = false;
     setStatus(`已提交 · 答对 ${correctCount}/${state.questions.length}`, correctCount === state.questions.length ? "ok" : "");
     updateArchiveSummary();
   }
@@ -506,8 +524,7 @@ export function mountLearningWidget(containerEl: HTMLElement, context: WidgetCon
       setStatus("请先提交答案", "err");
       return;
     }
-    archiveButton.disabled = true;
-    archiveButton.setText("归档中…");
+    archiveTopButton.setText("归档中…");
     try {
       for (const { question, index } of answered) {
         const record: LearningRecord = {
@@ -524,12 +541,11 @@ export function mountLearningWidget(containerEl: HTMLElement, context: WidgetCon
         if (disposed) return;
         dashboardEl.dispatchEvent(new CustomEvent("home-learning-archived", { bubbles: true, detail: record }));
       }
-      archiveButton.setText(`✓ 已归档 ${answered.length} 题`);
+      archiveTopButton.setText(`✓ 已归档 ${answered.length} 题`);
       setStatus(`已归档 ${answered.length} 题`, "ok");
       showDone(`✅ 已归档 ${answered.length} 道题（无论对错都会保存）`);
     } catch (error) {
-      archiveButton.disabled = false;
-      archiveButton.setText("📦 归档本次学习");
+      archiveTopButton.setText("📦 归档本次学习");
       showError(error, "归档失败");
       showDone(`❌ 归档失败：${errorMessage(error)}`, "err");
     }
@@ -538,20 +554,22 @@ export function mountLearningWidget(containerEl: HTMLElement, context: WidgetCon
   function resetRound(): void {
     state = emptyState();
     urlInput.value = "";
-    articleSection.hidden = true;
-    questionSection.hidden = true;
+    pasteTextarea.value = "";
+    pasteDetails.open = false;
+    learnSplit.hidden = true;
     questionList.empty();
-    submitAllButton.disabled = false;
+    submitAllButton.hidden = true;
+    submitAllButton.disabled = true;
     submitAllButton.setText("📝 提交全部答案");
-    archiveButton.disabled = true;
-    archiveButton.setText("📦 归档本次学习");
+    archiveTopButton.setText("📦 归档本次学习");
     archiveSummary.setText("");
-    keyPointList.hidden = true;
     keyPointList.empty();
     keyPointActions.hidden = true;
-    diagnostics.hidden = true;
     hideArchivedNotice();
     hideLoading();
+    // Restore top section to input mode: URL row visible, paste action
+    // buttons back, archive button hidden.
+    setInputSectionLoaded(false);
     setStatus("空闲");
   }
 
@@ -842,7 +860,7 @@ function pickQuestionCount(textLength: number): number {
  *      user has `enableFallbackProxies` set.
  *
  * Returns the cleaned article text + title. The raw HTML is also returned
- * so callers can keep it on `state.article` for diagnostics or fallback.
+ * so callers can keep it on `state.article` for future fallback use.
  */
 async function fetchArticle(
   client: CloakfetchClient,

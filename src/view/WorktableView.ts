@@ -4,7 +4,7 @@ import type ObsidianWorktablePlugin from "../main";
 import type { WorktableSettings } from "../settings";
 import type { WidgetContext, WidgetDescriptor, WidgetId, WidgetMount } from "../widgets/types";
 
-export const WORKTABLE_VIEW_TYPE = "obsidian-worktable-view";
+export const WORKTABLE_VIEW_TYPE = "worktable-view";
 
 interface SectionContainer {
   id: WidgetId;
@@ -69,7 +69,7 @@ export class WorktableView extends ItemView {
     const container = this.containerEl.children[1] as HTMLElement | undefined;
     if (!container) return;
     container.empty();
-    container.addClass("obsidian-worktable");
+    container.addClass("worktable");
 
     const root = container.createDiv({ cls: "worktable-root" });
     this.renderHeader(root);
@@ -85,9 +85,37 @@ export class WorktableView extends ItemView {
 
     const descriptors = getWidgetDescriptors();
     for (const descriptor of descriptors) {
+      // flowers 走特殊路径：挂到 learning 顶部右侧的 slot（不占 grid cell）
+      if (descriptor.id === "flowers") {
+        await this.mountFlowersIntoLearningSlot(descriptor, context);
+        continue;
+      }
       const section = this.sections.find((s) => s.id === descriptor.id);
       if (!section) continue;
       await this.mountWidget(descriptor, section, context);
+    }
+  }
+
+  private async mountFlowersIntoLearningSlot(
+    descriptor: WidgetDescriptor,
+    context: WidgetContext,
+  ): Promise<void> {
+    const learningSection = this.sections.find((s) => s.id === "learning");
+    const slot = learningSection?.widgetEl.querySelector<HTMLElement>("[data-flowers-slot]");
+    if (!slot) {
+      // learning widget 还没渲染或没有 slot——跳过，避免占位空白
+      return;
+    }
+    try {
+      const mount = await descriptor.mount();
+      mount(slot, context);
+      learningSection?.errorEl.hide();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      learningSection?.errorEl.setText(`⚠ Widget failed: ${message}`);
+      learningSection?.errorEl.show();
+      // eslint-disable-next-line no-console
+      console.error(`[worktable] widget ${descriptor.id} failed`, err);
     }
   }
 
@@ -113,7 +141,7 @@ export class WorktableView extends ItemView {
       { id: "pomodoro", title: "🍅 番茄钟", row: "top" },
       { id: "todo", title: "✅ 任务清单", row: "top" },
       { id: "learning", title: "🌱 学习", row: "mid" },
-      { id: "flowers", title: "🌸 小红花", row: "bottom" },
+      // flowers 移到 learning 顶部右侧的 slot（见 mountWidget 特殊处理）
       { id: "review", title: "🎓 今日复习", row: "bottom" },
       { id: "news", title: "📰 新闻", row: "mid" },
     ];
@@ -149,7 +177,7 @@ export class WorktableView extends ItemView {
       section.errorEl.setText(`⚠ Widget failed: ${message}`);
       section.errorEl.show();
       // eslint-disable-next-line no-console
-      console.error(`[obsidian-worktable] widget ${descriptor.id} failed`, err);
+      console.error(`[worktable] widget ${descriptor.id} failed`, err);
     }
   }
 

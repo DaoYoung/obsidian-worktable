@@ -1,13 +1,13 @@
 /* ============================================================
    Obsidian Worktable — Learning & Review Widgets
-   All rules scoped under .obsidian-worktable
+   All rules scoped under .worktable
    ============================================================ */
 
 /* ── Learning Widget ─────────────────────────────────────── */
 
 /* ── Learning Widget wrapper (matches Home.md card) ────────── */
 
-.obsidian-worktable .home-learn {
+.worktable .home-learn {
   box-sizing: border-box;
   padding: 20px;
   margin: 12px 0;
@@ -19,7 +19,7 @@
   color: var(--text-normal, #1a1a1a);
 }
 
-.obsidian-worktable .home-learn h3 {
+.worktable .home-learn h3 {
   margin: 0 0 10px;
   font-size: 16px;
   color: var(--text-normal, #1a1a1a);
@@ -28,7 +28,7 @@
   align-items: center;
 }
 
-.obsidian-worktable .learn-status {
+.worktable .learn-status {
   font-size: 11px;
   padding: 3px 8px;
   border-radius: 999px;
@@ -36,10 +36,10 @@
   color: var(--text-muted, #666);
 }
 
-.obsidian-worktable .learn-status.ok  { background: rgba(39, 174, 96, 0.18); color: #16a085; }
-.obsidian-worktable .learn-status.err { background: rgba(231, 76, 60, 0.18); color: #c0392b; }
+.worktable .learn-status.ok  { background: rgba(39, 174, 96, 0.18); color: #16a085; }
+.worktable .learn-status.err { background: rgba(231, 76, 60, 0.18); color: #c0392b; }
 
-.obsidian-worktable .learn-row {
+.worktable .learn-row {
   display: flex;
   gap: 6px;
   margin: 8px 0;
@@ -47,10 +47,10 @@
   align-items: center;
 }
 
-.obsidian-worktable .learn-row input[type="text"],
-.obsidian-worktable .learn-row input[type="url"],
-.obsidian-worktable .learn-row textarea,
-.obsidian-worktable .learn-row select {
+.worktable .learn-row input[type="text"],
+.worktable .learn-row input[type="url"],
+.worktable .learn-row textarea,
+.worktable .learn-row select {
   flex: 1 1 auto;
   min-width: 0;
   padding: 7px 10px;
@@ -62,14 +62,14 @@
   box-sizing: border-box;
 }
 
-.obsidian-worktable .learn-row textarea {
+.worktable .learn-row textarea {
   min-height: 70px;
   resize: vertical;
   font-family: inherit;
   line-height: 1.5;
 }
 
-.obsidian-worktable .learn-row button {
+.worktable .learn-row button {
   padding: 7px 14px;
   border: none;
   background: #3498db;
@@ -81,37 +81,44 @@
   transition: opacity 0.15s ease;
 }
 
-.obsidian-worktable .learn-row button:hover:not(:disabled) {
+/* Explicit `[hidden]` override: button's user-agent `display: inline-block`
+ * has the same specificity as `[hidden]` (0,1,0), so without this rule the
+ * browser may render buttons that the JS marked hidden. Used for
+ * archiveTopButton + newRoundButton which are hidden until a fetch/paste
+ * completes. */
+.worktable .learn-row button[hidden] { display: none; }
+
+.worktable .learn-row button:hover:not(:disabled) {
   opacity: 0.85;
 }
 
-.obsidian-worktable .learn-row button:disabled {
+.worktable .learn-row button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 
-.obsidian-worktable .learn-row button.secondary {
+.worktable .learn-row button.secondary {
   background: var(--background-secondary, #f6f6f6);
   color: var(--text-normal, #1a1a1a);
   border: 1px solid var(--background-modifier-border, #d8d8d8);
 }
 
-.obsidian-worktable .learn-row button.success {
+.worktable .learn-row button.success {
   background: #27ae60;
 }
 
-.obsidian-worktable .learn-row button.compact {
+.worktable .learn-row button.compact {
   padding: 4px 8px;
   font-size: 12px;
 }
 
-.obsidian-worktable .learn-question-position {
+.worktable .learn-question-position {
   font-size: 11px;
   color: var(--text-muted, #666);
   margin: 0 4px;
 }
 
-.obsidian-worktable .learn-section {
+.worktable .learn-section {
   margin: 10px 0;
   padding: 12px 14px;
   background: var(--background-primary, #fff);
@@ -119,7 +126,86 @@
   border-radius: 10px;
 }
 
-.obsidian-worktable .learn-section-h {
+/* ── 2-column split: ② 原文+重点 (左) ↔ ③ 出题+归档 (右) ──
+ *   Grid items default to align-items: stretch, so both columns are
+ *   equal height (max of natural heights). When content overflows the
+ *   cap, each column scrolls internally — the columns stay aligned. */
+
+/* 顶部 2:1 行：左 ① 输入文章，右 小红花+归档 slot */
+.worktable .learn-top-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 12px;
+  margin: 10px 0;
+  align-items: stretch;
+}
+
+.worktable .learn-top-input,
+.worktable .learn-top-flowers {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 让两侧的卡片都明确撑满列高，底边对齐。
+ *   height: 100% 是关键——只靠 flex: 1 1 auto 在某些情况下
+ *   仍按内容高度算，配合 height: 100% 才能无视内容尺寸填满。 */
+.worktable .learn-top-input > .learn-section,
+.worktable .learn-top-flowers > .home-flowers {
+  flex: 1 1 auto;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  box-sizing: border-box;
+}
+
+.worktable .learn-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 10px 0;
+}
+
+/* 显式让 [hidden] 压过 display: grid，否则 fetch 前不隐藏 */
+.worktable .learn-split[hidden] { display: none; }
+
+.worktable .learn-col {
+  display: flex;
+  flex-direction: column;
+  min-height: 240px;
+  max-height: 560px;
+  padding: 12px 14px;
+  background: var(--background-primary, #fff);
+  border: 1px solid var(--background-modifier-border, #d8d8d8);
+  border-radius: 10px;
+  box-sizing: border-box;
+}
+
+.worktable .learn-col-h {
+  font-size: 11px;
+  color: var(--text-muted, #666);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+/* Scrollable inner area: flex child of .learn-col. min-height: 0 is
+ * essential — without it, flex won't shrink below content size and the
+ * outer column scroll won't trigger. */
+.worktable .learn-col-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-right: 2px;
+}
+
+.worktable .learn-section-h {
   font-size: 11px;
   color: var(--text-muted, #666);
   text-transform: uppercase;
@@ -128,7 +214,7 @@
   font-weight: 600;
 }
 
-.obsidian-worktable .learn-context {
+.worktable .learn-context {
   font-size: 12px;
   color: var(--text-muted, #666);
   line-height: 1.6;
@@ -140,7 +226,7 @@
   margin-top: 8px;
 }
 
-.obsidian-worktable .learn-q-text {
+.worktable .learn-q-text {
   font-size: 14px;
   font-weight: 500;
   color: var(--text-normal, #1a1a1a);
@@ -148,7 +234,7 @@
   line-height: 1.5;
 }
 
-.obsidian-worktable .learn-question-badge {
+.worktable .learn-question-badge {
   font-size: 10px;
   padding: 2px 6px;
   background: var(--background-secondary, #f6f6f6);
@@ -159,14 +245,14 @@
   display: inline-block;
 }
 
-.obsidian-worktable .learn-options {
+.worktable .learn-options {
   display: flex;
   flex-direction: column;
   gap: 6px;
   margin: 8px 0;
 }
 
-.obsidian-worktable .learn-option {
+.worktable .learn-option {
   padding: 8px 12px;
   border: 1px solid var(--background-modifier-border, #d8d8d8);
   border-radius: 8px;
@@ -179,33 +265,33 @@
   font-family: inherit;
 }
 
-.obsidian-worktable .learn-option:hover:not(:disabled) {
+.worktable .learn-option:hover:not(:disabled) {
   border-color: #3498db;
 }
 
-.obsidian-worktable .learn-option:disabled {
+.worktable .learn-option:disabled {
   cursor: default;
 }
 
-.obsidian-worktable .learn-option.selected {
+.worktable .learn-option.selected {
   background: #3498db;
   color: white;
   border-color: #3498db;
 }
 
-.obsidian-worktable .learn-option.correct {
+.worktable .learn-option.correct {
   background: rgba(39, 174, 96, 0.15);
   border-color: #27ae60;
   color: #16a085;
 }
 
-.obsidian-worktable .learn-option.wrong {
+.worktable .learn-option.wrong {
   background: rgba(231, 76, 60, 0.15);
   border-color: #e74c3c;
   color: #c0392b;
 }
 
-.obsidian-worktable .learn-answer {
+.worktable .learn-answer {
   width: 100%;
   padding: 8px 12px;
   border: 1px solid var(--background-modifier-border, #d8d8d8);
@@ -221,7 +307,7 @@
   line-height: 1.5;
 }
 
-.obsidian-worktable .learn-feedback {
+.worktable .learn-feedback {
   padding: 10px 12px;
   border-radius: 8px;
   font-size: 13px;
@@ -229,19 +315,19 @@
   margin-top: 6px;
 }
 
-.obsidian-worktable .learn-feedback.ok {
+.worktable .learn-feedback.ok {
   background: rgba(39, 174, 96, 0.12);
   color: #16a085;
   border: 1px solid rgba(39, 174, 96, 0.3);
 }
 
-.obsidian-worktable .learn-feedback.err {
+.worktable .learn-feedback.err {
   background: rgba(231, 76, 60, 0.12);
   color: #c0392b;
   border: 1px solid rgba(231, 76, 60, 0.3);
 }
 
-.obsidian-worktable .learn-explanation {
+.worktable .learn-explanation {
   margin-top: 8px;
   padding: 10px 12px;
   background: var(--background-secondary, #f6f6f6);
@@ -252,21 +338,21 @@
   color: var(--text-muted, #666);
 }
 
-.obsidian-worktable .learn-description {
+.worktable .learn-description {
   font-size: 12px;
   color: var(--text-muted, #666);
   margin-bottom: 6px;
   line-height: 1.5;
 }
 
-.obsidian-worktable .learn-description a {
+.worktable .learn-description a {
   color: #3498db;
   text-decoration: underline;
   text-decoration-style: dotted;
   cursor: pointer;
 }
 
-.obsidian-worktable .learn-diagnostics {
+.worktable .learn-diagnostics {
   margin-top: 8px;
   padding: 8px 10px;
   background: var(--background-secondary, #f6f6f6);
@@ -280,7 +366,7 @@
   overflow-y: auto;
 }
 
-.obsidian-worktable .learn-divider {
+.worktable .learn-divider {
   margin: 12px 0 6px 0;
   font-size: 11px;
   color: var(--text-muted, #888);
@@ -288,11 +374,11 @@
   letter-spacing: 0.5px;
 }
 
-.obsidian-worktable .learn-paste-details {
+.worktable .learn-paste-details {
   margin: 8px 0 4px;
 }
 
-.obsidian-worktable .learn-paste-summary {
+.worktable .learn-paste-summary {
   font-size: 12px;
   color: var(--text-muted, #666);
   cursor: pointer;
@@ -302,11 +388,11 @@
   user-select: none;
 }
 
-.obsidian-worktable .learn-paste-summary::-webkit-details-marker {
+.worktable .learn-paste-summary::-webkit-details-marker {
   display: none;
 }
 
-.obsidian-worktable .learn-paste-summary::before {
+.worktable .learn-paste-summary::before {
   content: "▸";
   display: inline-block;
   margin-right: 6px;
@@ -314,16 +400,16 @@
   color: var(--text-muted, #888);
 }
 
-.obsidian-worktable .learn-paste-details[open] .learn-paste-summary::before {
+.worktable .learn-paste-details[open] .learn-paste-summary::before {
   transform: rotate(90deg);
 }
 
-.obsidian-worktable .learn-paste-summary:hover {
+.worktable .learn-paste-summary:hover {
   background: var(--background-modifier-hover, rgba(0, 0, 0, 0.04));
   color: var(--text-normal, #1a1a1a);
 }
 
-.obsidian-worktable .learn-paste-textarea {
+.worktable .learn-paste-textarea {
   width: 100%;
   min-height: 120px;
   padding: 8px 10px;
@@ -338,30 +424,30 @@
   box-sizing: border-box;
 }
 
-.obsidian-worktable .learn-paste-textarea:focus {
+.worktable .learn-paste-textarea:focus {
   border-color: var(--interactive-accent, #7f6df2);
   outline: none;
 }
 
-.obsidian-worktable .learn-paste-textarea::placeholder {
+.worktable .learn-paste-textarea::placeholder {
   color: var(--text-faint, #aaa);
 }
 
-.obsidian-worktable .home-learning {
+.worktable .home-learning {
   display: flex;
   flex-direction: column;
   gap: 12px;
   margin: 12px 0;
 }
 
-.obsidian-worktable .home-learning-input {
+.worktable .home-learning-input {
   display: flex;
   gap: 8px;
   align-items: center;
 }
 
-.obsidian-worktable .home-learning-input input[type="text"],
-.obsidian-worktable .home-learning-input input[type="url"] {
+.worktable .home-learning-input input[type="text"],
+.worktable .home-learning-input input[type="url"] {
   flex: 1 1 auto;
   min-width: 0;
   padding: 8px 12px;
@@ -373,7 +459,7 @@
   font-family: inherit;
 }
 
-.obsidian-worktable .home-learning-input button {
+.worktable .home-learning-input button {
   flex-shrink: 0;
   padding: 8px 14px;
   border: none;
@@ -386,41 +472,41 @@
   transition: opacity 0.15s ease;
 }
 
-.obsidian-worktable .home-learning-input button:hover {
+.worktable .home-learning-input button:hover {
   opacity: 0.85;
 }
 
-.obsidian-worktable .home-learning-input button:disabled {
+.worktable .home-learning-input button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
 /* ── Article Section ─────────────────────────────────────── */
 
-.obsidian-worktable .learning-article,
-.obsidian-worktable .learning-concept {
+.worktable .learning-article,
+.worktable .learning-concept {
   background: var(--background-secondary, #f6f6f6);
   border: 1px solid var(--background-modifier-border, #d8d8d8);
   border-radius: 12px;
   padding: 14px 16px;
 }
 
-.obsidian-worktable .learning-article h3,
-.obsidian-worktable .learning-concept h3 {
+.worktable .learning-article h3,
+.worktable .learning-concept h3 {
   margin: 0 0 8px 0;
   font-size: 14px;
   color: var(--text-normal, #1a1a1a);
   font-weight: 600;
 }
 
-.obsidian-worktable .kp-list {
+.worktable .kp-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
   margin-top: 6px;
 }
 
-.obsidian-worktable .kp-item {
+.worktable .kp-item {
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -430,12 +516,12 @@
   cursor: pointer;
 }
 
-.obsidian-worktable .kp-item input[type="checkbox"] {
+.worktable .kp-item input[type="checkbox"] {
   margin-top: 3px;
   flex-shrink: 0;
 }
 
-.obsidian-worktable .kp-actions {
+.worktable .kp-actions {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -444,7 +530,10 @@
   border-top: 1px dashed var(--background-modifier-border, #d8d8d8);
 }
 
-.obsidian-worktable .kp-actions button {
+/* 显式让 [hidden] 压过上面的 display: flex，否则渐进式显隐失效 */
+.worktable .kp-actions[hidden] { display: none; }
+
+.worktable .kp-actions button {
   padding: 6px 12px;
   border: 1px solid var(--background-modifier-border, #d8d8d8);
   border-radius: 6px;
@@ -455,32 +544,32 @@
   transition: background 0.15s ease;
 }
 
-.obsidian-worktable .kp-actions button:hover {
+.worktable .kp-actions button:hover {
   background: var(--background-modifier-hover, #ececec);
 }
 
-.obsidian-worktable .kp-actions button.primary {
+.worktable .kp-actions button.primary {
   background: var(--interactive-accent, #7c3aed);
   color: var(--text-on-accent, #fff);
   border-color: var(--interactive-accent, #7c3aed);
 }
 
-.obsidian-worktable .kp-actions button.primary:hover {
+.worktable .kp-actions button.primary:hover {
   opacity: 0.85;
 }
 
-.obsidian-worktable .kp-status {
+.worktable .kp-status {
   font-size: 12px;
   color: var(--text-muted, #666);
   margin-left: auto;
 }
 
-.obsidian-worktable .kp-status.ok  { color: #27ae60; }
-.obsidian-worktable .kp-status.err { color: #e74c3c; }
+.worktable .kp-status.ok  { color: #27ae60; }
+.worktable .kp-status.err { color: #e74c3c; }
 
 /* ── Concept preview (two-stage write) ───────────────────── */
 
-.obsidian-worktable .kp-preview {
+.worktable .kp-preview {
   background: var(--background-primary, #fff);
   border: 1px solid var(--background-modifier-border, #d8d8d8);
   border-radius: 8px;
@@ -488,7 +577,7 @@
   margin-top: 10px;
 }
 
-.obsidian-worktable .kp-preview-h {
+.worktable .kp-preview-h {
   font-size: 12px;
   font-weight: 600;
   color: var(--text-muted, #666);
@@ -497,7 +586,7 @@
   letter-spacing: 0.5px;
 }
 
-.obsidian-worktable .kp-preview-body {
+.worktable .kp-preview-body {
   font-size: 13px;
   line-height: 1.5;
   color: var(--text-normal, #1a1a1a);
@@ -508,21 +597,21 @@
   padding: 10px;
 }
 
-.obsidian-worktable .kp-preview-body pre,
-.obsidian-worktable .kp-preview-body code {
+.worktable .kp-preview-body pre,
+.worktable .kp-preview-body code {
   background: var(--background-primary, #fff);
   border-radius: 4px;
   padding: 1px 4px;
 }
 
-.obsidian-worktable .kp-preview-actions {
+.worktable .kp-preview-actions {
   display: flex;
   gap: 8px;
   margin-top: 10px;
   justify-content: flex-end;
 }
 
-.obsidian-worktable .kp-preview-actions button {
+.worktable .kp-preview-actions button {
   padding: 6px 12px;
   border: 1px solid var(--background-modifier-border, #d8d8d8);
   border-radius: 6px;
@@ -532,11 +621,11 @@
   cursor: pointer;
 }
 
-.obsidian-worktable .kp-preview-actions button:hover {
+.worktable .kp-preview-actions button:hover {
   background: var(--background-modifier-hover, #ececec);
 }
 
-.obsidian-worktable .kp-preview-actions button.primary {
+.worktable .kp-preview-actions button.primary {
   background: var(--interactive-accent, #7c3aed);
   color: var(--text-on-accent, #fff);
   border-color: var(--interactive-accent, #7c3aed);
@@ -544,35 +633,35 @@
 
 /* ── Quiz block ──────────────────────────────────────────── */
 
-.obsidian-worktable .learning-quiz {
+.worktable .learning-quiz {
   background: var(--background-secondary, #f6f6f6);
   border: 1px solid var(--background-modifier-border, #d8d8d8);
   border-radius: 12px;
   padding: 14px 16px;
 }
 
-.obsidian-worktable .learning-quiz h4 {
+.worktable .learning-quiz h4 {
   margin: 0 0 8px 0;
   font-size: 13px;
   font-weight: 600;
   color: var(--text-normal, #1a1a1a);
 }
 
-.obsidian-worktable .learning-quiz .quiz-q {
+.worktable .learning-quiz .quiz-q {
   font-size: 13px;
   line-height: 1.5;
   margin-bottom: 8px;
   color: var(--text-normal, #1a1a1a);
 }
 
-.obsidian-worktable .learning-quiz .quiz-options {
+.worktable .learning-quiz .quiz-options {
   display: flex;
   flex-direction: column;
   gap: 6px;
   margin: 8px 0;
 }
 
-.obsidian-worktable .learning-quiz .quiz-options button {
+.worktable .learning-quiz .quiz-options button {
   text-align: left;
   padding: 8px 12px;
   border: 1px solid var(--background-modifier-border, #d8d8d8);
@@ -584,23 +673,23 @@
   transition: background 0.15s ease;
 }
 
-.obsidian-worktable .learning-quiz .quiz-options button:hover {
+.worktable .learning-quiz .quiz-options button:hover {
   background: var(--background-modifier-hover, #ececec);
 }
 
-.obsidian-worktable .learning-quiz .quiz-options button.correct {
+.worktable .learning-quiz .quiz-options button.correct {
   background: rgba(39, 174, 96, 0.18);
   border-color: #27ae60;
   color: #16a085;
 }
 
-.obsidian-worktable .learning-quiz .quiz-options button.wrong {
+.worktable .learning-quiz .quiz-options button.wrong {
   background: rgba(231, 76, 60, 0.18);
   border-color: #e74c3c;
   color: #c0392b;
 }
 
-.obsidian-worktable .learning-quiz .quiz-input {
+.worktable .learning-quiz .quiz-input {
   width: 100%;
   padding: 8px 12px;
   border: 1px solid var(--background-modifier-border, #d8d8d8);
@@ -612,13 +701,13 @@
   box-sizing: border-box;
 }
 
-.obsidian-worktable .learning-quiz .quiz-actions {
+.worktable .learning-quiz .quiz-actions {
   display: flex;
   gap: 8px;
   margin-top: 8px;
 }
 
-.obsidian-worktable .learning-quiz .quiz-actions button {
+.worktable .learning-quiz .quiz-actions button {
   padding: 6px 12px;
   border: 1px solid var(--background-modifier-border, #d8d8d8);
   border-radius: 6px;
@@ -628,24 +717,24 @@
   cursor: pointer;
 }
 
-.obsidian-worktable .learning-quiz .quiz-actions button.primary {
+.worktable .learning-quiz .quiz-actions button.primary {
   background: var(--interactive-accent, #7c3aed);
   color: var(--text-on-accent, #fff);
   border-color: var(--interactive-accent, #7c3aed);
 }
 
-.obsidian-worktable .learning-quiz .quiz-feedback {
+.worktable .learning-quiz .quiz-feedback {
   margin-top: 8px;
   font-size: 12px;
   color: var(--text-muted, #666);
 }
 
-.obsidian-worktable .learning-quiz .quiz-feedback.ok  { color: #27ae60; }
-.obsidian-worktable .learning-quiz .quiz-feedback.err { color: #e74c3c; }
+.worktable .learning-quiz .quiz-feedback.ok  { color: #27ae60; }
+.worktable .learning-quiz .quiz-feedback.err { color: #e74c3c; }
 
 /* ── Service status banner ───────────────────────────────── */
 
-.obsidian-worktable .learning-service-banner {
+.worktable .learning-service-banner {
   padding: 10px 12px;
   border-radius: 8px;
   background: var(--background-modifier-error, rgba(231, 76, 60, 0.1));
@@ -654,7 +743,7 @@
   line-height: 1.5;
 }
 
-.obsidian-worktable .learning-service-banner code {
+.worktable .learning-service-banner code {
   background: var(--background-secondary, #f6f6f6);
   padding: 1px 4px;
   border-radius: 3px;
@@ -663,7 +752,7 @@
 
 /* ── Review Widget ───────────────────────────────────────── */
 
-.obsidian-worktable .home-review {
+.worktable .home-review {
   background: var(--background-secondary, #f6f6f6);
   border: 1px solid var(--background-modifier-border, #d8d8d8);
   border-radius: 12px;
@@ -671,39 +760,39 @@
   margin: 12px 0;
 }
 
-.obsidian-worktable .home-review-solo {
+.worktable .home-review-solo {
   margin: 0;
 }
 
-.obsidian-worktable .home-review-head {
+.worktable .home-review-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 12px;
 }
 
-.obsidian-worktable .home-review-head h3 {
+.worktable .home-review-head h3 {
   margin: 0;
   font-size: 15px;
   font-weight: 600;
   color: var(--text-normal, #1a1a1a);
 }
 
-.obsidian-worktable .home-review-head .home-review-source {
+.worktable .home-review-head .home-review-source {
   font-size: 11px;
   color: var(--text-muted, #666);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
-.obsidian-worktable .home-review-grid {
+.worktable .home-review-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 10px;
   margin-bottom: 12px;
 }
 
-.obsidian-worktable .home-review-empty {
+.worktable .home-review-empty {
   grid-column: 1 / -1;
   text-align: center;
   padding: 24px 16px;
@@ -714,18 +803,18 @@
   border: 1px dashed var(--background-modifier-border, #d8d8d8);
 }
 
-.obsidian-worktable .home-review-empty.err {
+.worktable .home-review-empty.err {
   color: var(--text-error, #c0392b);
   border-color: rgba(231, 76, 60, 0.4);
 }
 
-.obsidian-worktable .home-review-empty-help {
+.worktable .home-review-empty-help {
   margin-top: 6px;
   font-size: 11px;
   color: var(--text-faint, #999);
 }
 
-.obsidian-worktable .home-review-card {
+.worktable .home-review-card {
   background: var(--background-primary, #fff);
   border: 1px solid var(--background-modifier-border, #d8d8d8);
   border-radius: 10px;
@@ -733,20 +822,20 @@
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
-.obsidian-worktable .home-review-card:hover {
+.worktable .home-review-card:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
 }
 
-.obsidian-worktable .home-review-card.word {
+.worktable .home-review-card.word {
   border-left: 3px solid #3498db;
 }
 
-.obsidian-worktable .home-review-card.math {
+.worktable .home-review-card.math {
   border-left: 3px solid #e67e22;
 }
 
-.obsidian-worktable .home-review-pt {
+.worktable .home-review-pt {
   font-size: 11px;
   font-weight: 600;
   color: var(--text-muted, #666);
@@ -755,14 +844,14 @@
   letter-spacing: 0.5px;
 }
 
-.obsidian-worktable .home-review-title {
+.worktable .home-review-title {
   font-size: 16px;
   font-weight: 700;
   color: var(--text-normal, #1a1a1a);
   margin-bottom: 4px;
 }
 
-.obsidian-worktable .home-review-pos {
+.worktable .home-review-pos {
   font-size: 12px;
   font-weight: 400;
   color: var(--text-muted, #666);
@@ -770,13 +859,13 @@
   margin-left: 4px;
 }
 
-.obsidian-worktable .home-review-meta {
+.worktable .home-review-meta {
   font-size: 11px;
   color: var(--text-faint, #999);
   margin-bottom: 8px;
 }
 
-.obsidian-worktable .home-review-body {
+.worktable .home-review-body {
   font-size: 13px;
   line-height: 1.5;
   color: var(--text-normal, #1a1a1a);
@@ -786,8 +875,8 @@
   transition: max-height 0.2s ease, opacity 0.2s ease, margin-top 0.2s ease;
 }
 
-.obsidian-worktable .home-review-card.revealed .home-review-body,
-.obsidian-worktable .home-review-card.open .home-review-body {
+.worktable .home-review-card.revealed .home-review-body,
+.worktable .home-review-card.open .home-review-body {
   max-height: 800px;
   opacity: 1;
   margin-top: 8px;
@@ -795,7 +884,7 @@
   border-top: 1px dashed var(--background-modifier-border, #d8d8d8);
 }
 
-.obsidian-worktable .home-review-btn {
+.worktable .home-review-btn {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -810,11 +899,11 @@
   transition: background 0.15s ease;
 }
 
-.obsidian-worktable .home-review-btn:hover {
+.worktable .home-review-btn:hover {
   background: var(--background-modifier-hover, #ececec);
 }
 
-.obsidian-worktable .home-review-foot {
+.worktable .home-review-foot {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -825,12 +914,12 @@
   color: var(--text-muted, #666);
 }
 
-.obsidian-worktable .home-review-foot-actions {
+.worktable .home-review-foot-actions {
   display: flex;
   gap: 6px;
 }
 
-.obsidian-worktable .home-review-foot-actions button {
+.worktable .home-review-foot-actions button {
   padding: 4px 10px;
   border: 1px solid var(--background-modifier-border, #d8d8d8);
   border-radius: 6px;
@@ -840,7 +929,7 @@
   cursor: pointer;
 }
 
-.obsidian-worktable .home-review-foot-actions button:hover {
+.worktable .home-review-foot-actions button:hover {
   background: var(--background-modifier-hover, #ececec);
 }
 
@@ -849,7 +938,7 @@
  * service. Active (greenish) = direct AI is configured. Inactive (muted)
  * = service-only path; the banner points at the paste-text fallback and
  * the settings panel. */
-.obsidian-worktable .home-learn-banner {
+.worktable .home-learn-banner {
   margin: 6px 0 12px;
   padding: 8px 12px;
   border-radius: 6px;
@@ -858,7 +947,7 @@
   border: 1px solid transparent;
 }
 
-.obsidian-worktable .home-learn-banner.active {
+.worktable .home-learn-banner.active {
   background: var(--background-modifier-success, rgba(46, 160, 67, 0.12));
   border-color: var(--background-modifier-success-hover, rgba(46, 160, 67, 0.35));
   /* Use a fixed dark-green so contrast is correct in both light and dark
@@ -868,12 +957,12 @@
   font-weight: 600;
 }
 
-.obsidian-worktable.theme-dark .home-learn-banner.active,
-.obsidian-worktable .home-learn-banner.active {
+.worktable.theme-dark .home-learn-banner.active,
+.worktable .home-learn-banner.active {
   color: #15803d;
 }
 
-.obsidian-worktable .home-learn-banner.inactive {
+.worktable .home-learn-banner.inactive {
   background: var(--background-secondary, #f6f6f6);
   border-color: var(--background-modifier-border, #d8d8d8);
   color: var(--text-muted, #666);
@@ -883,7 +972,7 @@
  * default via class toggle (not the `hidden` attribute, which CSS
  * `display: flex` would otherwise override). The base rule omits
  * `display` so the element collapses to its natural hidden state. */
-.obsidian-worktable .home-learn-loading {
+.worktable .home-learn-loading {
   display: none;
   margin: 12px 0 4px;
   padding: 8px 12px;
@@ -898,30 +987,30 @@
   color: var(--text-muted, #555);
 }
 
-.obsidian-worktable .home-learn-loading.show {
+.worktable .home-learn-loading.show {
   display: flex;
   animation: home-learn-loading-in 0.15s ease;
 }
 
-.obsidian-worktable .home-learn-loading.show.loading {
+.worktable .home-learn-loading.show.loading {
   border-left: 3px solid var(--interactive-accent, #7c3aed);
 }
 
-.obsidian-worktable .home-learn-loading.show.ok {
+.worktable .home-learn-loading.show.ok {
   background: rgba(46, 160, 67, 0.06);
   border-color: rgba(46, 160, 67, 0.25);
   border-left: 3px solid #16a34a;
   color: #15803d;
 }
 
-.obsidian-worktable .home-learn-loading.show.err {
+.worktable .home-learn-loading.show.err {
   background: rgba(220, 38, 38, 0.06);
   border-color: rgba(220, 38, 38, 0.25);
   border-left: 3px solid #dc2626;
   color: #b91c1c;
 }
 
-.obsidian-worktable .home-learn-spinner {
+.worktable .home-learn-spinner {
   width: 14px;
   height: 14px;
   flex: 0 0 auto;
@@ -949,7 +1038,7 @@
 }
 
 /* Inline notice shown when the fetched URL has already been archived. */
-.obsidian-worktable .learn-archived-notice {
+.worktable .learn-archived-notice {
   margin: 6px 0 4px;
   padding: 6px 10px;
   border-radius: 6px;
@@ -961,7 +1050,7 @@
 }
 
 /* Global "submit all answers" button + archive row, below the question list. */
-.obsidian-worktable .learn-submit-all {
+.worktable .learn-submit-all {
   display: inline-block;
   margin: 12px 0 8px;
   padding: 6px 16px;
@@ -975,47 +1064,53 @@
   transition: opacity 0.15s ease;
 }
 
-.obsidian-worktable .learn-submit-all:hover:not(:disabled) {
+/* 显式让 [hidden] 压过 display: inline-block，否则渐进式显隐失效 */
+.worktable .learn-submit-all[hidden] { display: none; }
+
+.worktable .learn-submit-all:hover:not(:disabled) {
   opacity: 0.9;
 }
 
-.obsidian-worktable .learn-submit-all:disabled {
+.worktable .learn-submit-all:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
 
-.obsidian-worktable .learn-archive-row {
+.worktable .learn-archive-row {
   margin-top: 4px;
 }
 
+/* 显式让 [hidden] 压过继承的 .learn-row { display: flex } */
+.worktable .learn-archive-row[hidden] { display: none; }
+
 /* All questions rendered at once (no carousel). Each question is a card with
  * its own submit button + inline feedback. */
-.obsidian-worktable .learn-question-list {
+.worktable .learn-question-list {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-.obsidian-worktable .learn-question-card {
+.worktable .learn-question-card {
   padding: 12px 14px;
   border: 1px solid var(--background-modifier-border, #d8d8d8);
   border-radius: 10px;
   background: var(--background-primary, #fff);
 }
 
-.obsidian-worktable .learn-question-head {
+.worktable .learn-question-head {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-.obsidian-worktable .learn-question-index {
+.worktable .learn-question-index {
   font-size: 11px;
   color: var(--text-muted, #666);
   font-weight: 500;
 }
 
-.obsidian-worktable .learn-archive-summary {
+.worktable .learn-archive-summary {
   font-size: 12px;
   color: var(--text-muted, #666);
   margin-left: 8px;

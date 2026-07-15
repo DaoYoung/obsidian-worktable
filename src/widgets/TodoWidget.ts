@@ -24,7 +24,7 @@ export function mountTodoWidget(containerEl: HTMLElement, context: WidgetContext
   let showDone = true;
 
   const wrap = document.createElement("div");
-  wrap.className = "obsidian-worktable home-todo";
+  wrap.className = "worktable home-todo";
   containerEl.appendChild(wrap);
 
   // ── Input form ────────────────────────────────────────────────────────────

@@ -31,7 +31,7 @@ export function mountNewsWidget(
   const news = newsService ?? null;
 
   const wrap = document.createElement("div");
-  wrap.className = "obsidian-worktable home-news";
+  wrap.className = "worktable home-news";
   containerEl.appendChild(wrap);
 
   // Toolbar

@@ -60,6 +60,26 @@ export function createPomDb(): PomDb {
 
   async function addSession(rec: Omit<PomSession, "id">): Promise<void> {
     const db = await open();
+    // Inline dedup guard. Without this, multiple widget instances (e.g. the
+    // Worktable view open in two panes) or a finish() race can each call
+    // addSession() for the same session transition, producing 2–3 copies of
+    // the same record in the history. Checking here keeps the history clean
+    // in real time instead of waiting for the next mount-time sweep
+    // (deduplicateSessions).
+    const existing = await new Promise<PomSession[]>((resolve, reject) => {
+      const tx = db.transaction("sessions", "readonly");
+      const req = tx.objectStore("sessions").getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(req.error);
+    });
+    const isDup = existing.some(
+      (s) =>
+        s.type === rec.type &&
+        s.duration === rec.duration &&
+        Math.abs((s.completedAt ?? 0) - rec.completedAt) < 5000,
+    );
+    if (isDup) return;
+
     return new Promise((resolve, reject) => {
       const tx = db.transaction("sessions", "readwrite");
       tx.oncomplete = () => resolve();

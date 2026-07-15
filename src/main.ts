@@ -21,7 +21,7 @@ export default class ObsidianWorktablePlugin extends Plugin {
     });
 
     this.addCommand({
-      id: "obsidian-worktable-open",
+      id: "worktable-open",
       name: "Open Worktable",
       callback: () => {
         WorktableView.openForPlugin(this.app, this);
@@ -29,7 +29,7 @@ export default class ObsidianWorktablePlugin extends Plugin {
     });
 
     this.addCommand({
-      id: "obsidian-worktable-reveal-existing",
+      id: "worktable-reveal-existing",
       name: "Reveal existing Worktable leaf",
       checkCallback: (checking: boolean) => {
         const existing = this.app.workspace.getLeavesOfType(WORKTABLE_VIEW_TYPE);

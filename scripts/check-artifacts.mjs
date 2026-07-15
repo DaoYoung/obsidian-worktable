@@ -45,8 +45,8 @@ console.log(`  versions agree: ${manifest.version}`);
 
 // 3. styles.css must contain scoped CSS
 const css = await readFile(resolve(ROOT, "styles.css"), "utf8");
-if (!css.includes(".obsidian-worktable")) {
-  throw new Error("styles.css is missing scoped CSS (no .obsidian-worktable selector)");
+if (!css.includes(".worktable")) {
+  throw new Error("styles.css is missing scoped CSS (no .worktable selector)");
 }
 const cssSizeKB = (css.length / 1024).toFixed(1);
 console.log(`  styles.css: ${cssSizeKB} KB, scoped`);

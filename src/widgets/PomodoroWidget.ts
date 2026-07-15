@@ -112,7 +112,7 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
   let _finishing = false;
 
   const wrap = document.createElement("div");
-  wrap.className = "obsidian-worktable pomo-widget-instance";
+  wrap.className = "worktable pomo-widget-instance";
   wrap.setAttribute("data-mode", state.mode);
   containerEl.appendChild(wrap);
 
