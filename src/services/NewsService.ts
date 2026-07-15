@@ -92,6 +92,13 @@ export function listNewsFiles(app: App, folder: string): NewsItem[] {
   }
 
   const cache = app.metadataCache;
+  // Vault enumeration is intentional: the news widget surfaces any markdown
+  // inside the configured news folder OR tagged with #news anywhere in the
+  // vault, sorted by mtime. Reading every file path is the only way to
+  // honour the #news tag rule — `vault.getAbstractFileByPath` would miss
+  // tagged files outside the news folder. Plugin-review warning
+  // acknowledged; we don't read file contents here, only paths + mtime +
+  // frontmatter tags.
   const files = app.vault.getMarkdownFiles();
   for (const file of files as unknown as AbstractFileLike[]) {
     if (typeof file.path !== "string") continue;

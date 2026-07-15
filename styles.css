@@ -1,6 +1,6 @@
 /* ===========================================================================
    Obsidian Worktable — Built Styles
-   Generated: 2026-07-15T12-08-54
+   Generated: 2026-07-15T12-35-34
    Sources:
  *  - src/styles/base.css
  *  - src/styles/productivity.css
@@ -398,12 +398,6 @@
 
 .worktable-cmd-wrap {
   margin: 4px 0 8px 0;
-}
-
-.worktable-clipboard-fallback {
-  position: fixed;
-  opacity: 0;
-  pointer-events: none;
 }
 
 .worktable-cmd {

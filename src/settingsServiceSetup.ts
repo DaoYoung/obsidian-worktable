@@ -24,49 +24,24 @@ function detectPlatform(): HostPlatform {
   return "unknown";
 }
 
-/** Copy a string to the clipboard, falling back to a hidden textarea when
- * `navigator.clipboard` is unavailable (older Electron versions). */
-async function copyToClipboard(text: string): Promise<boolean> {
-  try {
-    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-  } catch {
-    // Fall through to the textarea fallback.
-  }
-  try {
-    const ta = document.createElement("textarea");
-    ta.className = "worktable-clipboard-fallback";
-    ta.value = text;
-    document.body.appendChild(ta);
-    ta.select();
-    const ok = document.execCommand("copy");
-    document.body.removeChild(ta);
-    return ok;
-  } catch {
-    return false;
-  }
+/** Show a command in a browser prompt dialog so the user can copy it
+ * manually. We intentionally avoid `navigator.clipboard.writeText` and
+ * `document.execCommand("copy")` here — both touch the system clipboard,
+ * and the plugin reviewer flags programmatic clipboard access. */
+function promptCommand(label: string, text: string): void {
+  // Use `window.prompt` so the text lands in an <input> the user can
+  // select+copy themselves, with no JS-side clipboard read/write.
+  window.prompt(label, text);
 }
 
-/** Build a click-to-copy command block. Clicking copies the text and
- * shows the localized "Copied!" feedback for ~1.5s. */
-function makeCopyableCode(parent: HTMLElement, text: string, copiedLabel: string): HTMLElement {
+/** Build a clickable code block that shows the command in a prompt so the
+ * user can copy it themselves (Cmd/Ctrl+C inside the prompt input). */
+function makeCopyableCode(parent: HTMLElement, text: string, label: string): HTMLElement {
   const wrap = parent.createDiv({ cls: "worktable-cmd-wrap" });
   const pre = wrap.createEl("pre", { cls: "worktable-cmd" });
   pre.textContent = text;
-  pre.setAttr("title", copiedLabel);
-  pre.addEventListener("click", async () => {
-    const ok = await copyToClipboard(text);
-    if (!ok) return;
-    const original = pre.textContent;
-    pre.textContent = copiedLabel;
-    pre.addClass("worktable-cmd-copied");
-    window.setTimeout(() => {
-      pre.textContent = original;
-      pre.removeClass("worktable-cmd-copied");
-    }, 1500);
-  });
+  pre.setAttr("title", label);
+  pre.addEventListener("click", () => promptCommand(label, text));
   return pre;
 }
 
@@ -81,12 +56,12 @@ function renderInstructions(container: HTMLElement, t: SettingsStrings, platform
       cls: "setting-item-description",
       text: t.serviceSetupMacosStep1,
     });
-    makeCopyableCode(container, t.serviceSetupMacosCloneCmd, t.serviceSetupCopied);
+    makeCopyableCode(container, t.serviceSetupMacosCloneCmd, t.serviceSetupCopyHint);
     container.createEl("p", {
       cls: "setting-item-description",
       text: t.serviceSetupMacosStep2,
     });
-    makeCopyableCode(container, t.serviceSetupMacosInstallCmd, t.serviceSetupCopied);
+    makeCopyableCode(container, t.serviceSetupMacosInstallCmd, t.serviceSetupCopyHint);
   } else {
     container.createEl("p", {
       cls: "setting-item-description",

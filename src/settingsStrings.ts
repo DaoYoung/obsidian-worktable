@@ -38,7 +38,7 @@ export interface SettingsStrings {
   serviceSetupResultOkServiceAt: (url: string) => string;
   serviceSetupResultDirectAi: string;
   serviceSetupResultDown: (detail: string) => string;
-  serviceSetupCopied: string;
+  serviceSetupCopyHint: string;
   directAiSection: string;
   directAiIntro: string;
   aiProviderName: string;
@@ -94,7 +94,7 @@ const en: SettingsStrings = {
   serviceSetupResultDirectAi:
     "✓ Direct AI is configured. The local service is optional.",
   serviceSetupResultDown: (detail) => `✗ Local service is not reachable: ${detail}`,
-  serviceSetupCopied: "Copied!",
+  serviceSetupCopyHint: "Click to view · then Cmd/Ctrl+C to copy",
   directAiSection: "Direct AI (optional)",
   directAiIntro:
     "When all three fields below are filled, the plugin calls AI directly and does not need the local Cloakfetch service for AI features. Leave blank to keep using the local service.",
@@ -155,7 +155,7 @@ const zh: SettingsStrings = {
   serviceSetupResultOkServiceAt: (url) => `✓ 本地服务可达 ${url}`,
   serviceSetupResultDirectAi: "✓ 已配置直连 AI。本地服务可选。",
   serviceSetupResultDown: (detail) => `✗ 本地服务不可达:${detail}`,
-  serviceSetupCopied: "已复制!",
+  serviceSetupCopyHint: "点击查看 · 然后按 Cmd/Ctrl+C 复制",
   directAiSection: "直连 AI(可选)",
   directAiIntro:
     "当下列三项均填写后,插件将直接调用 AI,不再依赖本地 Cloakfetch 服务。留空则继续使用本地服务。",
