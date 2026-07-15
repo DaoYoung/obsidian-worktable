@@ -33,7 +33,7 @@ jobs:
         shell: bash
         run: |
           VERSION=$(node -p "require('./manifest.json').version")
-          if [[ "$GITHUB_REF_NAME" != "v$VERSION" ]]; then
+          if [[ "$GITHUB_REF_NAME" != "$VERSION" ]]; then
             echo "Tag $GITHUB_REF_NAME does not match manifest version $VERSION" >&2
             exit 1
           fi
