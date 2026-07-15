@@ -47,6 +47,12 @@ export function mountActiveRecallWidget(containerEl: HTMLElement, context: Widge
   // Status banner (mirrors InquiryLearningWidget's loading banner)
   const loadingBanner = root.createDiv({ cls: "home-recall-loading", attr: { "aria-hidden": "true" } });
 
+  // 闪卡复习 slot —— WorktableView 在挂载完本组件后会把 review widget 挂到这里
+  const reviewSlot = root.createDiv({
+    cls: "home-recall-review-slot",
+    attr: { "data-review-slot": "" },
+  });
+
   const listen = <K extends keyof HTMLElementEventMap>(
     target: HTMLElement,
     event: K,

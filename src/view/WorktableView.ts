@@ -91,6 +91,11 @@ export class WorktableView extends ItemView {
         await this.mountFlowersIntoInquirySlot(descriptor, context);
         continue;
       }
+      // review 走特殊路径：挂到 active-recall 内部的 slot（不占 grid cell）
+      if (descriptor.id === "review") {
+        await this.mountReviewIntoActiveRecallSlot(descriptor, context);
+        continue;
+      }
       const section = this.sections.find((s) => s.id === descriptor.id);
       if (!section) continue;
       await this.mountWidget(descriptor, section, context);
@@ -115,6 +120,29 @@ export class WorktableView extends ItemView {
       const message = err instanceof Error ? err.message : String(err);
       inquirySection?.errorEl.setText(`⚠ Widget failed: ${message}`);
       inquirySection?.errorEl.show();
+      // eslint-disable-next-line no-console
+      console.error(`[worktable] widget ${descriptor.id} failed`, err);
+    }
+  }
+
+  private async mountReviewIntoActiveRecallSlot(
+    descriptor: WidgetDescriptor,
+    context: WidgetContext,
+  ): Promise<void> {
+    const recallSection = this.sections.find((s) => s.id === "active-recall");
+    const slot = recallSection?.widgetEl.querySelector<HTMLElement>("[data-review-slot]");
+    if (!slot) {
+      // active-recall widget 还没渲染或没有 slot——跳过，避免占位空白
+      return;
+    }
+    try {
+      const mount = await descriptor.mount();
+      mount(slot, context);
+      recallSection?.errorEl.hide();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      recallSection?.errorEl.setText(`⚠ Widget failed: ${message}`);
+      recallSection?.errorEl.show();
       // eslint-disable-next-line no-console
       console.error(`[worktable] widget ${descriptor.id} failed`, err);
     }

@@ -764,6 +764,10 @@
   margin: 0;
 }
 
+.worktable .home-recall-review-slot .home-review-solo {
+  margin-top: 12px;
+}
+
 .worktable .home-review-head {
   display: flex;
   align-items: center;
