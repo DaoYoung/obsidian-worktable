@@ -60,6 +60,9 @@ export function knowledgeExpandPrompt(name: string, context: string): { system: 
   const subjectHint = isEnglishWord
     ? '"subject": "英文词汇"（这是外语学习,请把重点放在中文翻译上:translation 填 1-3 句中文释义;pos: n./v./adj./adv. 等词性）'
     : '"subject": 一个简洁中文学科标签,如 数学 / 物理 / 化学 / 生物 / 历史 / 地理 / 政治 / 语文 / 经济 / 哲学 / 心理学 / 计算机 / 其他';
+  const exampleHint = isEnglishWord
+    ? '  "example": 1-2 个英文例句（每个例句附中文翻译）,用于展示常见用法;不要写代码示例（可选,可以空字符串）\n'
+    : '  "example": 可运行的 Markdown 代码示例或一段使用场景(可选,可以空字符串)\n';
   const system =
     "你是一个知识整理助手。请严格只返回 JSON 对象,不要任何其他文字、注释、Markdown 代码块。" +
     "内容准确、简洁、有结构,不要编造不存在的引用。";
@@ -72,7 +75,7 @@ export function knowledgeExpandPrompt(name: string, context: string): { system: 
     '  "translation": 中文翻译或释义（英文单词必填,其他学科可空字符串）\n' +
     '  "pos": 词性标注,英文单词必填（n./v./adj./adv./prep./conj./pron./num./art./aux./interj.）,其他学科可空字符串\n' +
     '  "points": 3-5 条关键要点(字符串数组)\n' +
-    '  "example": 可运行的 Markdown 代码示例或一段使用场景(可选,可以空字符串)\n' +
+    exampleHint +
     '  "contrast": 与其他易混淆概念的区别(可选,可以空字符串)\n' +
     '  "refs": 参考资料(可选,可以空字符串)\n\n' +
     '{"subject":"...","translation":"...","pos":"...","definition":"...","points":["...","..."],"example":"...","contrast":"...","refs":"..."}\n';
