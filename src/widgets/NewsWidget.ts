@@ -1,12 +1,7 @@
 import type { WidgetContext } from "../types";
 import type { HomeDb } from "../storage/homeDb";
 import type { NewsService } from "../services/NewsService";
-
-function escapeHtml(s: string): string {
-  return String(s).replace(/[<>"'&]/g, (c) =>
-    ({ "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;", "&": "&amp;" }[c] ?? c)
-  );
-}
+import { clearChildren, el } from "../utils/dom";
 
 function fmtDate(ts: number): string {
   const d = new Date(ts);
@@ -39,9 +34,18 @@ export function mountNewsWidget(
   toolbar.className = "home-news-toolbar";
   wrap.appendChild(toolbar);
 
-  const infoEl = document.createElement("span");
-  infoEl.className = "home-news-info";
-  infoEl.innerHTML = `📰 未读 <b id="news-stat">0</b> 篇 · 已读 <b id="news-stat-done">0</b> 篇`;
+  const statSpan = el("span", { attrs: { id: "news-stat" }, text: "0" });
+  const statDoneSpan = el("span", { attrs: { id: "news-stat-done" }, text: "0" });
+  const infoEl = el("span", {
+    className: "home-news-info",
+    children: [
+      "📰 未读 ",
+      el("b", { children: [statSpan] }),
+      " 篇 · 已读 ",
+      el("b", { children: [statDoneSpan] }),
+      " 篇",
+    ],
+  });
   toolbar.appendChild(infoEl);
 
   const clearBtn = document.createElement("button");
@@ -77,76 +81,103 @@ export function mountNewsWidget(
 
     const unread = items.filter((p) => !readIds.has(p.path));
 
-    const statEl = wrap.querySelector("#news-stat");
-    const statDoneEl = wrap.querySelector("#news-stat-done");
-    if (statEl) statEl.textContent = String(unread.length);
-    if (statDoneEl) statDoneEl.textContent = String(readIds.size);
+    statSpan.textContent = String(unread.length);
+    statDoneSpan.textContent = String(readIds.size);
+
+    clearChildren(listEl);
 
     if (items.length === 0) {
-      listEl.innerHTML = `<div class="home-news-empty">📭 还没有 news/ 笔记<br><small>把新闻文章放在 <code>news/</code> 文件夹,或加 <code>#news</code> 标签</small></div>`;
+      listEl.appendChild(
+        el("div", {
+          className: "home-news-empty",
+          children: [
+            "📭 还没有 news/ 笔记",
+            el("br"),
+            el("small", {
+              children: [
+                "把新闻文章放在 ",
+                el("code", { text: "news/" }),
+                " 文件夹,或加 ",
+                el("code", { text: "#news" }),
+                " 标签",
+              ],
+            }),
+          ],
+        })
+      );
       return;
     }
 
     if (unread.length === 0) {
-      listEl.innerHTML = `<div class="home-news-empty">✅ 全部已读完（共 <b>${items.length}</b> 篇）<br><small style="color:var(--text-faint,#999);">「清空已读记录」可重置</small></div>`;
+      listEl.appendChild(
+        el("div", {
+          className: "home-news-empty",
+          children: [
+            `✅ 全部已读完（共 ${items.length} 篇）`,
+            el("br"),
+            el("small", { className: "home-news-empty-hint", text: "「清空已读记录」可重置" }),
+          ],
+        })
+      );
       return;
     }
 
-    listEl.innerHTML = unread
-      .map((p) => {
-        const name = p.name;
-        const tag = tagFor(name);
-        const date = fmtDate(p.mtime);
-        const safePath = escapeHtml(p.path);
-        const safeName = escapeHtml(name);
-        return `<div class="home-news-item" data-path="${safePath}" data-name="${safeName}">
-        <span class="home-news-tag ${escapeHtml(tag.cls)}">${escapeHtml(tag.label)}</span>
-        <span class="home-news-title" data-name="${safeName}" title="打开 · 同时标记为已读">${escapeHtml(name.replace(/\.md$/, ""))}</span>
-        <span class="home-news-date">${escapeHtml(date)}</span>
-        <button class="home-news-mark" data-path="${safePath}" data-name="${safeName}" title="仅标记为已读,不打开">✓ 已读</button>
-      </div>`;
-      })
-      .join("");
+    unread.forEach((p) => {
+      const tag = tagFor(p.name);
+      const date = fmtDate(p.mtime);
+      const titleText = p.name.replace(/\.md$/, "");
 
-    // Click title → open + mark read
-    listEl.querySelectorAll<HTMLElement>(".home-news-title").forEach((el) => {
-      component.registerDomEvent(el, "click", () => {
-        const itemEl = (el as HTMLElement).closest(".home-news-item") as HTMLElement | null;
-        const path = itemEl?.dataset.path;
-        const name = (el as HTMLElement).dataset.name;
-
-        // Open via workspace
+      const titleSpan = el("span", {
+        className: "home-news-title",
+        attrs: { "data-name": p.name, title: "打开 · 同时标记为已读" },
+        text: titleText,
+      });
+      component.registerDomEvent(titleSpan, "click", () => {
         try {
-          if (app && name) {
-            // Use openLinkText on the workspace (not the leaf) to open the file
-            void app.workspace.openLinkText(name, "/", false);
+          if (app && p.name) {
+            void app.workspace.openLinkText(p.name, "/", false);
           }
         } catch (_) {}
-
-        // Async mark read
-        if (path && db) {
+        if (db) {
           void (async () => {
             try {
-              await db!.markArticleRead(path);
+              await db.markArticleRead(p.path);
             } catch (_) {}
             await render();
           })();
         }
       });
-    });
 
-    // Mark read button
-    listEl.querySelectorAll<HTMLElement>(".home-news-mark").forEach((btn) => {
-      component.registerDomEvent(btn, "click", async () => {
-        (btn as HTMLButtonElement).disabled = true;
-        const path = (btn as HTMLElement).dataset.path;
-        if (path && db) {
+      const markBtn = el("button", {
+        className: "home-news-mark",
+        attrs: { "data-path": p.path, "data-name": p.name, title: "仅标记为已读,不打开" },
+        text: "✓ 已读",
+      });
+      component.registerDomEvent(markBtn, "click", async () => {
+        markBtn.setAttribute("disabled", "true");
+        if (db) {
           try {
-            await db.markArticleRead(path);
+            await db.markArticleRead(p.path);
           } catch (_) {}
         }
         await render();
       });
+
+      listEl.appendChild(
+        el("div", {
+          className: "home-news-item",
+          attrs: { "data-path": p.path, "data-name": p.name },
+          children: [
+            el("span", {
+              className: tag.cls ? `home-news-tag ${tag.cls}` : "home-news-tag",
+              text: tag.label,
+            }),
+            titleSpan,
+            el("span", { className: "home-news-date", text: date }),
+            markBtn,
+          ],
+        })
+      );
     });
   }
 

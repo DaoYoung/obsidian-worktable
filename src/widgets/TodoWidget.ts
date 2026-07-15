@@ -1,11 +1,6 @@
 import type { WidgetContext } from "../types";
 import type { HomeDb } from "../storage/homeDb";
-
-function escapeHtml(s: string): string {
-  return String(s).replace(/[<>"'&]/g, (c) =>
-    ({ "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;", "&": "&amp;" }[c] ?? c)
-  );
-}
+import { clearChildren, el } from "../utils/dom";
 
 export function mountTodoWidget(containerEl: HTMLElement, context: WidgetContext, homeDb?: HomeDb): void {
   const { component } = context;
@@ -63,6 +58,70 @@ export function mountTodoWidget(containerEl: HTMLElement, context: WidgetContext
   wrap.appendChild(root2);
 
   // ── Render ────────────────────────────────────────────────────────────────
+  function renderItem(t: Todo): HTMLElement {
+    const isDone = t.status === "done";
+    const checkBtn = el("button", {
+      className: isDone ? "home-todo-check checked" : "home-todo-check",
+      attrs: {
+        "data-id": String(t.id),
+        "data-toggle": "1",
+        title: isDone ? "恢复" : "完成",
+      },
+      text: isDone ? "☑" : "☐",
+    });
+    component.registerDomEvent(checkBtn, "click", async () => {
+      const newStatus: "done" | "todo" = isDone ? "todo" : "done";
+      if (db) {
+        await db.updateTodo(t.id, {
+          status: newStatus,
+          completedAt: newStatus === "done" ? Date.now() : null,
+        });
+      }
+      await reload();
+    });
+
+    const editBtn = el("button", {
+      className: "edit",
+      attrs: { "data-id": String(t.id), title: "编辑" },
+      text: "✏️",
+    });
+    component.registerDomEvent(editBtn, "click", (e) => {
+      void startEdit(t.id, e as MouseEvent);
+    });
+
+    const delBtn = el("button", {
+      className: "del",
+      attrs: { "data-id": String(t.id), title: "删除" },
+      text: "🗑",
+    });
+    component.registerDomEvent(delBtn, "click", async () => {
+      if (!window.confirm("删除该任务？")) return;
+      if (db) await db.deleteTodo(t.id);
+      await reload();
+    });
+
+    return el("div", {
+      className: isDone ? "home-todo-item done" : "home-todo-item",
+      attrs: { "data-id": String(t.id) },
+      children: [
+        checkBtn,
+        el("span", {
+          className: `home-todo-prio-pill ${t.priority}`,
+          text: t.priority,
+        }),
+        el("span", {
+          className: "home-todo-text",
+          attrs: { "data-id": String(t.id) },
+          text: t.text,
+        }),
+        el("span", {
+          className: "home-todo-actions",
+          children: [editBtn, delBtn],
+        }),
+      ],
+    });
+  }
+
   function renderList(): void {
     const sorted = [...todos].sort((a, b) => {
       if (a.status !== b.status) return a.status === "done" ? 1 : -1;
@@ -72,102 +131,99 @@ export function mountTodoWidget(containerEl: HTMLElement, context: WidgetContext
     const active = sorted.filter((t) => t.status !== "done");
     const done = sorted.filter((t) => t.status === "done");
 
-    function renderItem(t: (typeof todos)[number]): string {
-      const isDone = t.status === "done";
-      return `<div class="home-todo-item${isDone ? " done" : ""}" data-id="${t.id}">
-        <button class="home-todo-check${isDone ? " checked" : ""}" data-id="${t.id}" data-toggle="1" title="${isDone ? "恢复" : "完成"}">${isDone ? "☑" : "☐"}</button>
-        <span class="home-todo-prio-pill ${escapeHtml(t.priority)}">${escapeHtml(t.priority)}</span>
-        <span class="home-todo-text" data-id="${t.id}">${escapeHtml(t.text)}</span>
-        <span class="home-todo-actions">
-          <button class="edit" data-id="${t.id}" title="编辑">✏️</button>
-          <button class="del" data-id="${t.id}" title="删除">🗑</button>
-        </span>
-      </div>`;
-    }
+    clearChildren(root2);
 
-    root2.innerHTML = `
-      <div class="home-todo-section">
-        <div class="home-todo-section-h">
-          <span>📋 进行中 · <span class="ct">${active.length}</span></span>
-          <span style="color:var(--text-faint,#999);font-size:11px;">按优先级排序</span>
-        </div>
-        ${active.length === 0 ? '<div class="home-todo-empty">✨ 任务已清空 · 加一个吧</div>' : active.map(renderItem).join("")}
-      </div>
-      <div class="home-todo-section">
-        <div class="home-todo-section-h">
-          <span>✅ 已完成 · <span class="ct">${done.length}</span></span>
-          <span>
-            <button id="todo-toggle-done" title="${showDone ? "隐藏" : "展开"}">${showDone ? "🔽" : "▶"}</button>
-            ${done.length > 0 ? '<button id="todo-clear-done" title="清空已完成">🗑</button>' : ""}
-          </span>
-        </div>
-        ${showDone ? (done.length === 0 ? '<div class="home-todo-empty">暂无</div>' : done.map(renderItem).join("")) : ""}
-      </div>
-    `;
+    // Active section
+    const activeHeaderActions = el("span", {
+      className: "home-todo-section-meta",
+      text: "按优先级排序",
+    });
+    const activeSection = el("div", {
+      className: "home-todo-section",
+      children: [
+        el("div", {
+          className: "home-todo-section-h",
+          children: [
+            el("span", {
+              children: ["📋 进行中 · ", el("span", { className: "ct", text: String(active.length) })],
+            }),
+            activeHeaderActions,
+          ],
+        }),
+        active.length === 0
+          ? el("div", { className: "home-todo-empty", text: "✨ 任务已清空 · 加一个吧" })
+          : el("div", {
+              className: "home-todo-items",
+              children: active.map(renderItem),
+            }),
+      ],
+    });
+    root2.appendChild(activeSection);
 
-    // Toggle done
-    const tgl = root2.querySelector<HTMLElement>("#todo-toggle-done");
-    if (tgl) {
-      component.registerDomEvent(tgl, "click", () => {
-        showDone = !showDone;
-        renderList();
+    // Done section
+    const toggleBtn = el("button", {
+      attrs: { id: "todo-toggle-done", title: showDone ? "隐藏" : "展开" },
+      text: showDone ? "🔽" : "▶",
+    });
+    component.registerDomEvent(toggleBtn, "click", () => {
+      showDone = !showDone;
+      renderList();
+    });
+
+    const doneSectionActions = el("span", { children: [toggleBtn] });
+    if (done.length > 0) {
+      const clearDoneBtn = el("button", {
+        attrs: { id: "todo-clear-done", title: "清空已完成" },
+        text: "🗑",
       });
-    }
-
-    // Clear done
-    const clr = root2.querySelector<HTMLElement>("#todo-clear-done");
-    if (clr) {
-      component.registerDomEvent(clr, "click", async () => {
+      component.registerDomEvent(clearDoneBtn, "click", async () => {
         if (!window.confirm("清空所有已完成任务？")) return;
         if (db) await db.clearDoneTodos();
         await reload();
       });
+      doneSectionActions.appendChild(clearDoneBtn);
     }
 
-    // Toggle complete
-    root2.querySelectorAll<HTMLElement>('[data-toggle="1"]').forEach((b) => {
-      component.registerDomEvent(b, "click", async () => {
-        const id = Number((b as HTMLElement).dataset.id);
-        const t = todos.find((x) => x.id === id);
-        if (!t) return;
-        const newStatus: "done" | "todo" = t.status === "done" ? "todo" : "done";
-        if (db) {
-          await db.updateTodo(id, {
-            status: newStatus,
-            completedAt: newStatus === "done" ? Date.now() : null,
-          });
-        }
-        await reload();
-      });
+    const doneHeader = el("div", {
+      className: "home-todo-section-h",
+      children: [
+        el("span", {
+          children: ["✅ 已完成 · ", el("span", { className: "ct", text: String(done.length) })],
+        }),
+        doneSectionActions,
+      ],
     });
 
-    // Delete
-    root2.querySelectorAll<HTMLElement>(".del").forEach((b) => {
-      component.registerDomEvent(b, "click", async () => {
-        if (!window.confirm("删除该任务？")) return;
-        if (db) await db.deleteTodo(Number((b as HTMLElement).dataset.id));
-        await reload();
+    let doneBody: HTMLElement;
+    if (!showDone) {
+      doneBody = el("div", { className: "home-todo-section", children: [doneHeader] });
+    } else if (done.length === 0) {
+      doneBody = el("div", {
+        className: "home-todo-section",
+        children: [doneHeader, el("div", { className: "home-todo-empty", text: "暂无" })],
       });
-    });
-
-    // Edit
-    root2.querySelectorAll<HTMLElement>(".edit").forEach((b) => {
-      component.registerDomEvent(b, "click", (e) => {
-        void startEdit(Number((b as HTMLElement).dataset.id), e as MouseEvent);
+    } else {
+      doneBody = el("div", {
+        className: "home-todo-section",
+        children: [
+          doneHeader,
+          el("div", { className: "home-todo-items", children: done.map(renderItem) }),
+        ],
       });
-    });
+    }
+    root2.appendChild(doneBody);
   }
 
   function startEdit(id: number, _ev: MouseEvent): void {
     const t = todos.find((x) => x.id === id);
     if (!t) return;
-    const textSpan = root2.querySelector(`.home-todo-text[data-id="${id}"]`);
+    const textSpan = root2.querySelector<HTMLElement>(`.home-todo-text[data-id="${id}"]`);
     if (!textSpan) return;
     const old = t.text;
     const input = document.createElement("input");
     input.type = "text";
     input.value = old;
-    textSpan.innerHTML = "";
+    clearChildren(textSpan);
     textSpan.appendChild(input);
     input.focus();
     input.select();
