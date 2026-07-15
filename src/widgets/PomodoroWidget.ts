@@ -60,10 +60,22 @@ function loadState(): PomState {
   if (s.todayDone.date !== today) {
     s.todayDone = { date: today, count: 0 };
   }
-  if (s.running && s.endsAt && s.endsAt < Date.now() - 2000) {
+  // If the timer would have finished while the view was closed, clear it.
+  if (s.endsAt && s.endsAt < Date.now() - 2000) {
     s.endsAt = null;
     s.running = false;
     s.pausedRemain = null;
+  }
+  // Never auto-resume a running session on mount — opening/refresh the
+  // worktable must not silently start the ticker. Convert the running
+  // state to a paused one so the remaining time is preserved and the user
+  // can hit 继续 when ready. The on/off state is remembered (mode,
+  // duration, remaining time), but the clock does not run until the user
+  // asks it to.
+  if (s.running && s.endsAt) {
+    s.pausedRemain = Math.max(0, Math.round((s.endsAt - Date.now()) / 1000));
+    s.endsAt = null;
+    s.running = false;
   }
   return s;
 }
@@ -716,10 +728,9 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
       setDbStatus("err", `${String(e)} · 历史不可用`);
     }
 
-    if (state.running && state.endsAt) {
-      startTicker();
-      tick();
-    }
+    // Do not auto-restart the ticker on mount — the on/off state is
+    // remembered (via loadState → pausedRemain), but ticking waits for an
+    // explicit 继续 click.
 
     if ("Notification" in window && Notification.permission === "default" && state.config.notify) {
       try {
