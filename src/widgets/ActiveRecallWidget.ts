@@ -23,8 +23,6 @@ export function mountActiveRecallWidget(containerEl: HTMLElement, context: Widge
   let disposed = false;
 
   const root = containerEl.createDiv({ cls: "home-recall" });
-  const heading = root.createEl("h3");
-  const statusEl = heading.createSpan({ cls: "learn-status", text: "空闲" });
 
   const conceptSection = section(root, "录入新知识点（无需抓取文章）");
   const conceptDescription = conceptSection.createDiv({ cls: "learn-description" });
@@ -56,11 +54,6 @@ export function mountActiveRecallWidget(containerEl: HTMLElement, context: Widge
   ): void => {
     target.addEventListener(event, handler as EventListener);
     component.register(() => target.removeEventListener(event, handler as EventListener));
-  };
-
-  const setStatus = (text: string, kind = ""): void => {
-    statusEl.setText(text);
-    statusEl.className = `learn-status${kind ? ` ${kind}` : ""}`;
   };
 
   const showLoading = (message: string): void => {
@@ -131,7 +124,6 @@ export function mountActiveRecallWidget(containerEl: HTMLElement, context: Widge
       showPreviewSubject(entry);
       preview.hidden = false;
       conceptStatus.setText("请预览后确认写入");
-      setStatus(`已生成预览 · 待确认：${name}`);
       showDone("✅ 已生成预览，请确认后写入");
     } catch (error) {
       preview.hidden = true;
@@ -226,7 +218,6 @@ export function mountActiveRecallWidget(containerEl: HTMLElement, context: Widge
       preview.hidden = true;
       previewSubject.hidden = true;
       previewBody.empty();
-      setStatus(`知识点已写入 ${subjectLabel || "随手记"}`, "ok");
     } catch (error) {
       conceptStatus.className = "kp-status err";
       conceptStatus.setText(`写入失败：${errorMessage(error)}`);

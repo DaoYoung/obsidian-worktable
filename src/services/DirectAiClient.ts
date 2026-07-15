@@ -179,6 +179,15 @@ function parseKeyPointsResponse(raw: string, maxPoints: number): string[] {
   return lines.slice(0, maxPoints);
 }
 
+function unescapeNewlines(s: string): string {
+  // Some providers return JSON where `\n` survives as the two literal
+  // characters backslash + n (e.g. inside `example` / `definition`). JSON.parse
+  // won't unescape those when the source itself isn't a valid JSON string, and
+  // MarkdownRenderer then renders them verbatim. Convert them here so the
+  // preview gets real line breaks.
+  return s.replace(/\\n/g, "\n");
+}
+
 function parseExpandedResponse(name: string, raw: string): ExpandedKnowledge {
   let candidate = raw;
   const fence = /```(?:json)?\s*([\s\S]*?)```/.exec(raw);
@@ -192,20 +201,22 @@ function parseExpandedResponse(name: string, raw: string): ExpandedKnowledge {
     if (obj && typeof obj === "object") parsed = obj as Record<string, unknown>;
   } catch (_err) {
     // Treat the raw text as the markdown body when JSON parsing fails.
-    const body = raw.trim();
+    const body = unescapeNewlines(raw.trim());
     return { subject: "", translation: "", pos: "", markdown: body ? `# ${name}\n\n${body}` : "" };
   }
 
-  const subject = typeof parsed["subject"] === "string" ? (parsed["subject"] as string).trim() : "";
-  const translation = typeof parsed["translation"] === "string" ? (parsed["translation"] as string).trim() : "";
-  const pos = typeof parsed["pos"] === "string" ? (parsed["pos"] as string).trim() : "";
-  const definition = typeof parsed["definition"] === "string" ? (parsed["definition"] as string).trim() : "";
+  const subject = typeof parsed["subject"] === "string" ? unescapeNewlines(parsed["subject"] as string).trim() : "";
+  const translation = typeof parsed["translation"] === "string" ? unescapeNewlines(parsed["translation"] as string).trim() : "";
+  const pos = typeof parsed["pos"] === "string" ? unescapeNewlines(parsed["pos"] as string).trim() : "";
+  const definition = typeof parsed["definition"] === "string" ? unescapeNewlines(parsed["definition"] as string).trim() : "";
   const points = Array.isArray(parsed["points"])
-    ? (parsed["points"] as unknown[]).filter((p): p is string => typeof p === "string")
+    ? (parsed["points"] as unknown[])
+        .filter((p): p is string => typeof p === "string")
+        .map((p) => unescapeNewlines(p).trim())
     : [];
-  const example = typeof parsed["example"] === "string" ? (parsed["example"] as string).trim() : "";
-  const contrast = typeof parsed["contrast"] === "string" ? (parsed["contrast"] as string).trim() : "";
-  const refs = typeof parsed["refs"] === "string" ? (parsed["refs"] as string).trim() : "";
+  const example = typeof parsed["example"] === "string" ? unescapeNewlines(parsed["example"] as string).trim() : "";
+  const contrast = typeof parsed["contrast"] === "string" ? unescapeNewlines(parsed["contrast"] as string).trim() : "";
+  const refs = typeof parsed["refs"] === "string" ? unescapeNewlines(parsed["refs"] as string).trim() : "";
 
   const markdown = renderExpandedMarkdown({ subject, translation, pos, definition, points, example, contrast, refs });
 
@@ -213,6 +224,6 @@ function parseExpandedResponse(name: string, raw: string): ExpandedKnowledge {
     subject,
     translation,
     pos,
-    markdown: markdown || `# ${name}\n\n${raw.trim()}`,
+    markdown: markdown || `# ${name}\n\n${unescapeNewlines(raw.trim())}`,
   };
 }
