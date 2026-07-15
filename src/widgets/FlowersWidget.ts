@@ -25,7 +25,7 @@ export function mountFlowersWidget(containerEl: HTMLElement, context: WidgetCont
   let archivesExpanded = false;
 
   const wrap = document.createElement("div");
-  wrap.className = "obsidian-worktable home-flowers";
+  wrap.className = "worktable home-flowers";
   containerEl.appendChild(wrap);
 
   // Header

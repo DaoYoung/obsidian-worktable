@@ -1,0 +1,250 @@
+/**
+ * Unit tests for the pure dedup-cluster helper used by both
+ * `addSession` (inline dedup) and `deduplicateSessions` (mount-time sweep).
+ *
+ * Pinned behavior:
+ * - Records with same (type, duration) whose consecutive completedAt gaps
+ *   are within `windowMs` form one cluster; only the earliest survives.
+ * - Records > `windowMs` apart with the same signature are NOT merged
+ *   (different real sessions, even if back-to-back).
+ * - Different signatures (different type or duration) never merge, even
+ *   at the same millisecond.
+ * - Records without an id are silently skipped (they cannot be deleted).
+ */
+
+import { describe, it, expect } from "vitest";
+import { findDuplicateIds, computeStats, type PomSession } from "../src/storage/pomodoroDb";
+
+function rec(id: number, type: string, duration: number, completedAt: number): PomSession {
+  return {
+    id,
+    type,
+    duration,
+    startedAt: completedAt - duration,
+    completedAt,
+    date: new Date(completedAt).toISOString().slice(0, 10),
+  };
+}
+
+function datedRec(
+  id: number,
+  type: string,
+  duration: number,
+  date: string,
+): PomSession {
+  return { id, type, duration, startedAt: 0, completedAt: 0, date };
+}
+
+describe("findDuplicateIds", () => {
+  it("returns empty set when records list is empty", () => {
+    expect(findDuplicateIds([]).size).toBe(0);
+  });
+
+  it("returns empty set when no two records share the same type+duration", () => {
+    const records = [
+      rec(1, "work", 1500, 1000),
+      rec(2, "short", 300, 2000),
+      rec(3, "long", 900, 3000),
+    ];
+    expect(findDuplicateIds(records).size).toBe(0);
+  });
+
+  it("keeps a single record and drops the rest of a 100ms cluster", () => {
+    const records = [
+      rec(1, "work", 1500, 1000),
+      rec(2, "work", 1500, 1050),
+      rec(3, "work", 1500, 1100),
+    ];
+    const out = findDuplicateIds(records);
+    expect(out.has(2)).toBe(true);
+    expect(out.has(3)).toBe(true);
+    expect(out.has(1)).toBe(false);
+  });
+
+  it("treats gaps larger than the window as separate clusters", () => {
+    // Two real back-to-back 25-min work sessions (~1500000ms apart)
+    // plus a phantom 2s after the first — must keep both real sessions
+    // and drop only the phantom.
+    const records = [
+      rec(1, "work", 1500, 1_000_000),
+      rec(2, "work", 1500, 1_002_000),    // phantom, 2s after rec 1
+      rec(3, "work", 1500, 1_510_000),    // real session 25 min later
+    ];
+    const out = findDuplicateIds(records);
+    expect(out.has(2)).toBe(true);
+    expect(out.has(1)).toBe(false);
+    expect(out.has(3)).toBe(false);
+  });
+
+  it("catches interleaved duplicates that the old adjacent-only scan would miss", () => {
+    // [A, B-different, A-dup-of-A] — rec 1 and rec 3 share signature but
+    // are not adjacent after sort, so the previous linear-scan dedup
+    // would have missed them. We expect rec 3 deleted.
+    const records = [
+      rec(1, "work", 1500, 1000),
+      rec(2, "short", 300, 1500),    // breaks adjacency in linear scan
+      rec(3, "work", 1500, 1500),    // same completedAt as the short, but the
+                                      // short lives in a different bucket so it
+                                      // doesn't suppress this work-dup
+    ];
+    const out = findDuplicateIds(records);
+    expect(out.has(3)).toBe(true);
+    expect(out.has(1)).toBe(false);
+    expect(out.has(2)).toBe(false);
+  });
+
+  it("never merges records with different durations", () => {
+    // Different durations land in different buckets regardless of timing.
+    const records = [
+      rec(1, "work", 1500, 1000),
+      rec(2, "work", 60,   1050),
+    ];
+    expect(findDuplicateIds(records).size).toBe(0);
+  });
+
+  it("never merges records with different types", () => {
+    const records = [
+      rec(1, "work",  1500, 1000),
+      rec(2, "short", 1500, 1000),
+    ];
+    expect(findDuplicateIds(records).size).toBe(0);
+  });
+
+  it("silently skips records without an id (cannot be deleted)", () => {
+    const records: PomSession[] = [
+      { id: 1, type: "work", duration: 1500, startedAt: 0, completedAt: 1000, date: "1970-01-01" },
+      { id: undefined, type: "work", duration: 1500, startedAt: 0, completedAt: 1050, date: "1970-01-01" },
+      { id: 3, type: "work", duration: 1500, startedAt: 0, completedAt: 1100, date: "1970-01-01" },
+    ];
+    const out = findDuplicateIds(records);
+    // id-less record cannot be added to Set<number>; rec 3 should still be flagged.
+    expect(out.has(3)).toBe(true);
+    expect(out.size).toBe(1);
+  });
+
+  it("respects a custom completedAt window when startedAt is also far apart", () => {
+    // Records spaced 200s in BOTH completedAt and startedAt — well outside
+    // any reasonable window. Verifies the windowMs parameter is honored.
+    const t0 = 1_700_000_000_000;
+    const records = [
+      rec(1, "work", 1500, t0),
+      rec(2, "work", 1500, t0 + 200_000),
+    ];
+    expect(findDuplicateIds(records, 1_000).size).toBe(0);
+    expect(findDuplicateIds(records, 250_000).has(2)).toBe(true);
+  });
+
+  it("reproduces the user's 'same time, multiple records' pattern", () => {
+    // Simulate the symptom from the screenshot: 5 phantom work records
+    // spaced ~200ms apart — every record but the earliest must be removed.
+    const t0 = Date.now();
+    const records = [
+      rec(10, "work", 1500, t0),
+      rec(11, "work", 1500, t0 + 200),
+      rec(12, "work", 1500, t0 + 400),
+      rec(13, "work", 1500, t0 + 600),
+      rec(14, "work", 1500, t0 + 800),
+    ];
+    const out = findDuplicateIds(records);
+    expect(out.has(10)).toBe(false); // anchor survives
+    for (const id of [11, 12, 13, 14]) {
+      expect(out.has(id)).toBe(true);
+    }
+  });
+
+  it("catches phantom records spaced minutes apart via shared startedAt", () => {
+    // Real-world pattern after multiple hot-reloads during a paused timer:
+    // each phantom share the original session's startedAt (T0) but their
+    // completedAt drifts by minutes. The 5s completedAt window alone
+    // misses these; the 2-minute startedAt window catches them.
+    const T0 = 1_700_000_000_000;
+    const records = [
+      rec(1, "work", 1500, T0 + 1500),          // legitimate (T0+25min)
+      rec(2, "work", 1500, T0 + 1500 + 30_000),  // phantom 30s later (same T0)
+      rec(3, "work", 1500, T0 + 1500 + 90_000),  // phantom 90s later (same T0)
+      rec(4, "work", 1500, T0 + 1500 + 180_000), // phantom 3 min later (same T0)
+    ];
+    const out = findDuplicateIds(records);
+    expect(out.has(1)).toBe(false); // real record survives
+    for (const id of [2, 3, 4]) {
+      expect(out.has(id)).toBe(true);
+    }
+  });
+
+  it("does NOT cross-merge legitimate back-to-back same-signature sessions", () => {
+    // Real session A finishes, then real session B starts 25 min later.
+    // Their completedAt AND startedAt are both 25 min apart — well outside
+    // both windows — so neither should be flagged.
+    const T0 = 1_700_000_000_000;
+    const TWENTY_FIVE_MIN = 25 * 60 * 1000;
+    const records = [
+      rec(1, "work", TWENTY_FIVE_MIN, T0 + TWENTY_FIVE_MIN),
+      rec(2, "work", TWENTY_FIVE_MIN, T0 + TWENTY_FIVE_MIN + TWENTY_FIVE_MIN),
+    ];
+    expect(findDuplicateIds(records).size).toBe(0);
+  });
+});
+
+describe("computeStats (excluding today from averages)", () => {
+  const TODAY = "2026-07-15";
+  const YESTERDAY = "2026-07-14";
+  const TWO_DAYS_AGO = "2026-07-13";
+
+  it("counts today's records separately and never mixes them into the averages", () => {
+    const records: PomSession[] = [
+      // Today: 3 work sessions, 1 short break (sums focus + break for today).
+      datedRec(1, "work", 1500, TODAY),
+      datedRec(2, "work", 1500, TODAY),
+      datedRec(3, "work", 1500, TODAY),
+      datedRec(4, "short", 300, TODAY),
+      // Yesterday: 2 work sessions, 0 breaks.
+      datedRec(5, "work", 1500, YESTERDAY),
+      datedRec(6, "work", 1500, YESTERDAY),
+      // Two days ago: 1 work + 1 long break.
+      datedRec(7, "work", 1500, TWO_DAYS_AGO),
+      datedRec(8, "long", 900, TWO_DAYS_AGO),
+    ];
+    const stats = computeStats(records, TODAY);
+    expect(stats.todayCount).toBe(3);
+    expect(stats.todayFocusSec).toBe(4500);
+    expect(stats.todayBreakSec).toBe(300);
+    // Past-only: 3 work sessions (across 2 days), 1 break (900s long).
+    expect(stats.focusCount).toBe(3);
+    expect(stats.focusTotalSec).toBe(4500);
+    expect(stats.breakTotalSec).toBe(900);
+    expect(stats.activeDays).toBe(2);
+    // Today's 3 work sessions are NOT counted toward the past total —
+    // otherwise daily averages would skew toward whatever the user did today.
+  });
+
+  it("returns zero past-totals when the only records are today's", () => {
+    const records: PomSession[] = [
+      datedRec(1, "work", 1500, TODAY),
+      datedRec(2, "short", 300, TODAY),
+    ];
+    const stats = computeStats(records, TODAY);
+    expect(stats.todayCount).toBe(1);
+    expect(stats.todayBreakSec).toBe(300);
+    expect(stats.focusCount).toBe(0);
+    expect(stats.focusTotalSec).toBe(0);
+    expect(stats.breakTotalSec).toBe(0);
+    expect(stats.activeDays).toBe(0);
+  });
+
+  it("returns empty stats for an empty record set", () => {
+    const stats = computeStats([], TODAY);
+    expect(stats.todayCount).toBe(0);
+    expect(stats.focusCount).toBe(0);
+    expect(stats.activeDays).toBe(0);
+  });
+
+  it("ignores records with no date field when computing active days", () => {
+    const records: PomSession[] = [
+      { id: 1, type: "work", duration: 1500, startedAt: 0, completedAt: 0, date: YESTERDAY },
+      { id: 2, type: "work", duration: 1500, startedAt: 0, completedAt: 0, date: "" }, // missing
+    ];
+    const stats = computeStats(records, TODAY);
+    expect(stats.focusCount).toBe(2);
+    expect(stats.activeDays).toBe(1); // empty-date record does not contribute a day
+  });
+});

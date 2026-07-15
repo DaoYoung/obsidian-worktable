@@ -574,6 +574,36 @@ def _extract_keypoints(title: str, text: str, max_points: int = 8) -> list:
     return [l for l in lines if 5 < len(l) < 200][:max_points]
 
 
+def _unescape_newlines(s: str) -> str:
+    """Convert literal `\n` (two chars: backslash + n) to real newlines.
+
+    The AI sometimes returns string fields where the source contains the
+    two-character sequence `\\n` instead of a real newline. JSON.parse
+    won't unescape those, and MarkdownRenderer then displays them
+    verbatim.
+    """
+    return s.replace("\\n", "\n")
+
+
+# Heuristics for "this string looks like source code". We never want code in
+# the vocabulary learning path even if the model sneaks some in.
+_CODE_MARKERS = (
+    "```",       # fenced code block
+    "function ", "function(",
+    "const ", "let ", "var ",
+    "import ", "from ", "require(",
+    "def ", "class ",
+    "console.", "System.out",
+    "<script", "#!/",
+)
+
+
+def _looks_like_code(s: str) -> bool:
+    if not s:
+        return False
+    return any(marker in s for marker in _CODE_MARKERS)
+
+
 def _expand_knowledge_point(name: str, context: str = "") -> dict:
     """Ask the AI to organize a knowledge point.
 
@@ -585,30 +615,66 @@ def _expand_knowledge_point(name: str, context: str = "") -> dict:
       - raw: 原始 AI 输出（解析失败时的兜底）
     """
     snippet = context.strip()[:4000] if context else ""
-    is_english_word = bool(re.match(r"^[A-Za-z][A-Za-z'\-]{0,30}$", (name or "").strip()))
-    subject_hint = (
-        '"subject": "英文词汇"（1-3 句中文翻译,放 translation 字段；pos: n./v./adj./adv. 等）'
-        if is_english_word
-        else '"subject": 一个简洁中文学科标签,如 数学 / 物理 / 化学 / 生物 / 历史 / 地理 / 政治 / 语文 / 经济 / 哲学 / 心理学 / 计算机 / 其他'
-    )
-    system = (
-        "你是一个知识整理助手。请严格只返回 JSON 对象,不要任何其他文字、注释、Markdown 代码块。"
-        "内容准确、简洁、有结构,不要编造不存在的引用。"
-    )
-    user = (
-        f"知识点名称:{name}\n\n"
-        + (f"额外参考上下文:\n{snippet}\n\n" if snippet else "")
-        + "请用 JSON 返回一个知识点的结构化解释,字段如下:\n"
-        + f"  {subject_hint}\n"
-        + '  "definition": 1-3 句中文定义\n'
-        + '  "translation": 中文翻译或释义（英文单词必填,其他学科可空字符串）\n'
-        + '  "pos": 词性标注,英文单词必填（n./v./adj./adv./prep./conj./pron./num./art./aux./interj.）,其他学科可空字符串\n'
-        + '  "points": 3-5 条关键要点(字符串数组)\n'
-        + '  "example": 可运行的 Markdown 代码示例或一段使用场景(可选,可以空字符串)\n'
-        + '  "contrast": 与其他易混淆概念的区别(可选,可以空字符串)\n'
-        + '  "refs": 参考资料(可选,可以空字符串)\n\n'
-        + '{"subject":"...","translation":"...","pos":"...","definition":"...","points":["...","..."],"example":"...","contrast":"...","refs":"..."}\n'
-    )
+    # Foreign-vocabulary detection: any short input with no Chinese characters
+    # but containing Latin/accented letters is treated as foreign-language
+    # learning (English words, phrases, café, naïve, …). We route it to the
+    # "英文词汇" subject so the writer files it as vocabulary and the AI focuses
+    # on the Chinese translation rather than a full subject write-up.
+    _name = (name or "").strip()
+    has_cjk = bool(re.search(r"[一-鿿]", _name))
+    has_latin = bool(re.search(r"[A-Za-zÀ-ɏ]", _name))
+    is_english_word = (not has_cjk) and has_latin and len(_name) <= 40
+    if is_english_word:
+        # English-vocabulary learning: the user typed an English word and
+        # wants to learn its Chinese meaning. Force the model to stay in
+        # vocabulary-learning territory even if the word has a strong
+        # technical meaning (e.g. "spawn" → Python multiprocessing). The
+        # subject hint alone isn't enough; the whole prompt has to
+        # explicitly steer away from any non-linguistic interpretation.
+        system = (
+            "你是一个英文单词学习助手,负责把用户输入的英文单词整理成中文词汇卡片。"
+            "请严格只返回 JSON 对象,不要任何其他文字、注释、Markdown 代码块。"
+            "重要:用户输入的是英文单词,目的是学习它的中文含义,不是查任何技术文档。"
+            "如果这个词恰好也是某个编程/技术/API 中的术语（例如 'spawn' 在 Python "
+            "multiprocessing、Unreal Engine、游戏引擎中等),完全忽略那些技术含义,"
+            "只把它当作一个普通英语单词来解释。"
+        )
+        user = (
+            f"英文单词:{name}\n\n"
+            + (f"额外参考上下文:\n{snippet}\n\n" if snippet else "")
+            + "请用 JSON 返回这个英文单词的学习卡片(**只解释作为英文单词的含义,不要写任何代码、不要举编程/技术示例**):\n"
+            + '  "subject": "英文词汇"\n'
+            + '  "translation": 1-3 句中文释义(必填,例如「产卵;大量产生;引发」这种常规英文词汇含义)\n'
+            + '  "pos": 词性(必填,n./v./adj./adv./prep./conj./pron./num./art./aux./interj.)\n'
+            + '  "definition": 1-2 句中文解释,告诉用户这个单词在英文里通常怎么用(不要写代码、不要解释技术用法)\n'
+            + '  "points": 3-5 条关键要点,每条都是中文,围绕单词本身的含义、常见搭配、近义词等\n'
+            + '  "example": 留空字符串 "" —— 英文单词场景下不需要示例字段\n'
+            + '  "contrast": 与意思相近的英文单词的区别(可选,可以空字符串)\n'
+            + '  "refs": 参考资料(可选,可以空字符串)\n\n'
+            + '{"subject":"英文词汇","translation":"...","pos":"...","definition":"...","points":["...","..."],"example":"","contrast":"...","refs":"..."}\n'
+        )
+    else:
+        subject_hint = (
+            '"subject": 一个简洁中文学科标签,如 数学 / 物理 / 化学 / 生物 / 历史 / 地理 / 政治 / 语文 / 经济 / 哲学 / 心理学 / 计算机 / 其他'
+        )
+        system = (
+            "你是一个知识整理助手。请严格只返回 JSON 对象,不要任何其他文字、注释、Markdown 代码块。"
+            "内容准确、简洁、有结构,不要编造不存在的引用。"
+        )
+        user = (
+            f"知识点名称:{name}\n\n"
+            + (f"额外参考上下文:\n{snippet}\n\n" if snippet else "")
+            + "请用 JSON 返回一个知识点的结构化解释,字段如下:\n"
+            + f"  {subject_hint}\n"
+            + '  "definition": 1-3 句中文定义\n'
+            + '  "translation": 中文翻译或释义（英文单词必填,其他学科可空字符串）\n'
+            + '  "pos": 词性标注,英文单词必填（n./v./adj./adv./prep./conj./pron./num./art./aux./interj.）,其他学科可空字符串\n'
+            + '  "points": 3-5 条关键要点(字符串数组)\n'
+            + '  "example": 可运行的 Markdown 代码示例或一段使用场景(可选,可以空字符串)\n'
+            + '  "contrast": 与其他易混淆概念的区别(可选,可以空字符串)\n'
+            + '  "refs": 参考资料(可选,可以空字符串)\n\n'
+            + '{"subject":"...","translation":"...","pos":"...","definition":"...","points":["...","..."],"example":"...","contrast":"...","refs":"..."}\n'
+        )
     raw = _call_anthropic(system, user, max_tokens=1800, timeout=80)
 
     def _try_json(s):
@@ -632,35 +698,46 @@ def _expand_knowledge_point(name: str, context: str = "") -> dict:
 
     obj = _try_json(raw)
     if obj and isinstance(obj, dict):
+        # For English-vocabulary learning the user explicitly does not want
+        # code samples — even if the model writes some. The prompt asks for
+        # example = "" and forbids code, but we also drop the example field
+        # server-side as a safety net. The same goes for the `contrast`
+        # field when it slipped into technical comparisons.
+        drop_examples = is_english_word
         parts = []
-        defn = str(obj.get("definition", "")).strip()
+        defn = _unescape_newlines(str(obj.get("definition", ""))).strip()
         if defn:
             parts.append(f"## 是什么\n\n{defn}\n")
         pts = obj.get("points") or []
         if isinstance(pts, list) and pts:
-            bullets = "\n".join(f"- {str(p).strip()}" for p in pts if str(p).strip())
+            bullets = "\n".join(
+                f"- {_unescape_newlines(str(p)).strip()}"
+                for p in pts
+                if _unescape_newlines(str(p)).strip()
+            )
             if bullets:
                 parts.append(f"## 关键要点\n\n{bullets}\n")
-        example = str(obj.get("example", "")).strip()
-        if example:
-            parts.append(f"## 示例\n\n{example}\n")
-        contrast = str(obj.get("contrast", "")).strip()
-        if contrast:
+        if not drop_examples:
+            example = _unescape_newlines(str(obj.get("example", ""))).strip()
+            if example and not _looks_like_code(example):
+                parts.append(f"## 示例\n\n{example}\n")
+        contrast = _unescape_newlines(str(obj.get("contrast", ""))).strip()
+        if contrast and not (drop_examples and _looks_like_code(contrast)):
             parts.append(f"## 易混淆 / 对比\n\n{contrast}\n")
-        refs = str(obj.get("refs", "")).strip()
+        refs = _unescape_newlines(str(obj.get("refs", ""))).strip()
         if refs:
             parts.append(f"## 参考资料\n\n{refs}\n")
-        md = "\n".join(parts)[:6000] if parts else raw.strip()[:6000]
-        subject = _clean_subject(str(obj.get("subject", "")).strip(), fallback=("英文词汇" if is_english_word else "其他"))
-        translation = str(obj.get("translation", "")).strip()
-        pos = _clean_pos(str(obj.get("pos", "")).strip())
+        md = "\n".join(parts)[:6000] if parts else _unescape_newlines(raw.strip())[:6000]
+        subject = _clean_subject(_unescape_newlines(str(obj.get("subject", ""))).strip(), fallback=("英文词汇" if is_english_word else "其他"))
+        translation = _unescape_newlines(str(obj.get("translation", ""))).strip()
+        pos = _clean_pos(_unescape_newlines(str(obj.get("pos", ""))).strip())
         return {"subject": subject, "translation": translation, "pos": pos, "markdown": md, "raw": raw}
 
     fence = re.search(r"```(?:markdown|md)?\s*([\s\S]*?)```", raw)
     if fence:
-        md = fence.group(1).strip()[:6000]
+        md = _unescape_newlines(fence.group(1).strip())[:6000]
     else:
-        md = raw.strip()[:6000]
+        md = _unescape_newlines(raw.strip())[:6000]
     return {"subject": ("英文词汇" if is_english_word else "其他"), "translation": "", "pos": "", "markdown": md, "raw": raw}
 
 

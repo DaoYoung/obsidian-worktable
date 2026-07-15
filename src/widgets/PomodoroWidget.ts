@@ -60,10 +60,24 @@ function loadState(): PomState {
   if (s.todayDone.date !== today) {
     s.todayDone = { date: today, count: 0 };
   }
-  if (s.running && s.endsAt && s.endsAt < Date.now() - 2000) {
+  // If the timer would have finished while the view was closed, clear it.
+  if (s.endsAt && s.endsAt < Date.now() - 2000) {
     s.endsAt = null;
     s.running = false;
     s.pausedRemain = null;
+  }
+  // Never auto-resume a running session on mount — opening/refresh the
+  // worktable must not silently start the ticker. Convert the running
+  // state to a paused one so the remaining time is preserved and the user
+  // can hit 继续 when ready. The on/off state is remembered (mode,
+  // duration, remaining time), but the clock does not run until the user
+  // asks it to.
+  if (s.running) {
+    if (s.endsAt) {
+      s.pausedRemain = Math.max(0, Math.round((s.endsAt - Date.now()) / 1000));
+    }
+    s.endsAt = null;
+    s.running = false;
   }
   return s;
 }
@@ -91,6 +105,11 @@ function fmt(sec: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
+function formatHours(sec: number): string {
+  const hours = (sec || 0) / 3600;
+  return `${hours.toFixed(1)}小时`;
+}
+
 function escapeHtml(s: string): string {
   return String(s).replace(/[<>"'&]/g, (c) =>
     ({ "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;", "&": "&amp;" }[c] ?? c)
@@ -104,9 +123,10 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
   let ticker: number | null = null;
   let db: PomDb | null = pomDb ?? null;
   let dbReady = false;
+  let _finishing = false;
 
   const wrap = document.createElement("div");
-  wrap.className = "obsidian-worktable pomo-widget-instance";
+  wrap.className = "worktable pomo-widget-instance";
   wrap.setAttribute("data-mode", state.mode);
   containerEl.appendChild(wrap);
 
@@ -263,16 +283,29 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
   statsDiv.className = "pomo-stats";
   right.appendChild(statsDiv);
 
-  for (const stat of [
-    { id: "pomo-stat-today", label: "今日 🍅" },
-    { id: "pomo-stat-total", label: "累计" },
-    { id: "pomo-stat-min", label: "总分钟" },
-  ] as const) {
-    const statEl = document.createElement("div");
-    statEl.className = "pomo-stat";
-    statEl.innerHTML = `<div class="pomo-stat-v" id="${stat.id}">0</div><div class="pomo-stat-l">${stat.label}</div>`;
-    statsDiv.appendChild(statEl);
-  }
+  const statRows: ReadonlyArray<ReadonlyArray<{ id: string; label: string }>> = [
+    [
+      { id: "pomo-stat-today", label: "今日专注次数" },
+      { id: "pomo-stat-today-focus", label: "今日专注时间" },
+      { id: "pomo-stat-today-break", label: "今日休息时间" },
+    ],
+    [
+      { id: "pomo-stat-avg-count", label: "日均次数" },
+      { id: "pomo-stat-avg-focus", label: "日均专注时间" },
+      { id: "pomo-stat-avg-break", label: "日均休息时间" },
+    ],
+  ];
+  statRows.forEach((rowStats, idx) => {
+    const rowEl = document.createElement("div");
+    rowEl.className = "pomo-stats-row" + (idx === 1 ? " avg" : "");
+    for (const stat of rowStats) {
+      const statEl = document.createElement("div");
+      statEl.className = "pomo-stat";
+      statEl.innerHTML = `<div class="pomo-stat-v" id="${stat.id}">0</div><div class="pomo-stat-l">${stat.label}</div>`;
+      rowEl.appendChild(statEl);
+    }
+    statsDiv.appendChild(rowEl);
+  });
 
   // History
   const histDiv = document.createElement("div");
@@ -382,8 +415,12 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
   }
 
   function tick(): void {
-    if (!state.running) return;
-    const remaining = Math.max(0, Math.round((state.endsAt! - Date.now()) / 1000));
+    if (!state.running || _finishing) return;
+    if (state.endsAt == null) {
+      state.running = false;
+      return;
+    }
+    const remaining = Math.max(0, Math.round((state.endsAt - Date.now()) / 1000));
     if (remaining <= 0) {
       void finish();
       return;
@@ -446,12 +483,14 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
   function skip(): void {
     if (state.endsAt && state.running) {
       state.endsAt = Date.now() - 1;
-    } else {
-      void finish();
     }
+    // When the timer is not actively running, there is nothing to
+    // skip — finish() would create a spurious session record.
   }
 
   async function finish(): Promise<void> {
+    if (_finishing) return;
+    _finishing = true;
     stopTicker();
     state.running = false;
     const wasRunning = state.endsAt != null;
@@ -508,6 +547,7 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
 
     render();
     void refreshHistory();
+    _finishing = false;
   }
 
   function switchMode(mode: PomState["mode"], duration: number): void {
@@ -547,8 +587,12 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
           .join("");
       }
       ($("pomo-stat-today")!).textContent = String(st.todayCount);
-      ($("pomo-stat-total")!).textContent = String(st.total);
-      ($("pomo-stat-min")!.textContent = String(st.totalMin));
+      ($("pomo-stat-today-focus")!).textContent = formatHours(st.todayFocusSec);
+      ($("pomo-stat-today-break")!).textContent = formatHours(st.todayBreakSec);
+      const days = st.activeDays || 1;
+      ($("pomo-stat-avg-count")!).textContent = (st.focusCount / days).toFixed(1);
+      ($("pomo-stat-avg-focus")!).textContent = formatHours(st.focusTotalSec / days);
+      ($("pomo-stat-avg-break")!).textContent = formatHours(st.breakTotalSec / days);
     } catch (e) {
       ($("pomo-list")!).innerHTML = `<li style="color:var(--text-faint);">⚠ 读取失败: ${escapeHtml(String(e))}</li>`;
     }
@@ -669,6 +713,7 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
     try {
       if (db) {
         await db.open();
+        await db.deduplicateSessions();
         dbReady = true;
         setDbStatus("ok", `${db ? "pomodoro-db" : ""} · ready`);
         try {
@@ -689,10 +734,9 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
       setDbStatus("err", `${String(e)} · 历史不可用`);
     }
 
-    if (state.running && state.endsAt) {
-      startTicker();
-      tick();
-    }
+    // Do not auto-restart the ticker on mount — the on/off state is
+    // remembered (via loadState → pausedRemain), but ticking waits for an
+    // explicit 继续 click.
 
     if ("Notification" in window && Notification.permission === "default" && state.config.notify) {
       try {

@@ -65,7 +65,14 @@ export class DirectAiClient {
   async expandKnowledge(name: string, context = ""): Promise<ExpandedKnowledge> {
     const { system, user } = knowledgeExpandPrompt(name, context);
     const raw = await this.client.call(system, user, 1800);
-    return parseExpandedResponse(name, raw);
+    // Mirror the is_english_word heuristic from the prompt builder so the
+    // parser knows to drop any code the model slips into the example /
+    // contrast fields despite the prompt's "no code" rule.
+    const trimmed = (name || "").trim();
+    const hasCjk = /[一-鿿]/.test(trimmed);
+    const hasLatin = /[A-Za-zÀ-ɏ]/.test(trimmed);
+    const isEnglishWord = !hasCjk && hasLatin && trimmed.length <= 40;
+    return parseExpandedResponse(name, raw, isEnglishWord);
   }
 
   async ping(): Promise<boolean> {
@@ -179,7 +186,35 @@ function parseKeyPointsResponse(raw: string, maxPoints: number): string[] {
   return lines.slice(0, maxPoints);
 }
 
-function parseExpandedResponse(name: string, raw: string): ExpandedKnowledge {
+function unescapeNewlines(s: string): string {
+  // Some providers return JSON where `\n` survives as the two literal
+  // characters backslash + n (e.g. inside `example` / `definition`). JSON.parse
+  // won't unescape those when the source itself isn't a valid JSON string, and
+  // MarkdownRenderer then renders them verbatim. Convert them here so the
+  // preview gets real line breaks.
+  return s.replace(/\\n/g, "\n");
+}
+
+// Heuristic markers that strongly suggest a string is source code rather
+// than prose. The active-recall prompt forbids code samples for English
+// vocabulary, but we drop the field client-side as a safety net in case the
+// model still slips some in.
+const CODE_MARKERS = [
+  "```",
+  "function ", "function(",
+  "const ", "let ", "var ",
+  "import ", "from ", "require(",
+  "def ", "class ",
+  "console.", "System.out",
+  "<script", "#!/",
+];
+
+function looksLikeCode(s: string): boolean {
+  if (!s) return false;
+  return CODE_MARKERS.some((m) => s.includes(m));
+}
+
+function parseExpandedResponse(name: string, raw: string, isEnglishWord = false): ExpandedKnowledge {
   let candidate = raw;
   const fence = /```(?:json)?\s*([\s\S]*?)```/.exec(raw);
   if (fence && fence[1]) candidate = fence[1].trim();
@@ -192,20 +227,34 @@ function parseExpandedResponse(name: string, raw: string): ExpandedKnowledge {
     if (obj && typeof obj === "object") parsed = obj as Record<string, unknown>;
   } catch (_err) {
     // Treat the raw text as the markdown body when JSON parsing fails.
-    const body = raw.trim();
+    const body = unescapeNewlines(raw.trim());
     return { subject: "", translation: "", pos: "", markdown: body ? `# ${name}\n\n${body}` : "" };
   }
 
-  const subject = typeof parsed["subject"] === "string" ? (parsed["subject"] as string).trim() : "";
-  const translation = typeof parsed["translation"] === "string" ? (parsed["translation"] as string).trim() : "";
-  const pos = typeof parsed["pos"] === "string" ? (parsed["pos"] as string).trim() : "";
-  const definition = typeof parsed["definition"] === "string" ? (parsed["definition"] as string).trim() : "";
+  const subject = typeof parsed["subject"] === "string" ? unescapeNewlines(parsed["subject"] as string).trim() : "";
+  const translation = typeof parsed["translation"] === "string" ? unescapeNewlines(parsed["translation"] as string).trim() : "";
+  const pos = typeof parsed["pos"] === "string" ? unescapeNewlines(parsed["pos"] as string).trim() : "";
+  const definition = typeof parsed["definition"] === "string" ? unescapeNewlines(parsed["definition"] as string).trim() : "";
   const points = Array.isArray(parsed["points"])
-    ? (parsed["points"] as unknown[]).filter((p): p is string => typeof p === "string")
+    ? (parsed["points"] as unknown[])
+        .filter((p): p is string => typeof p === "string")
+        .map((p) => unescapeNewlines(p).trim())
     : [];
-  const example = typeof parsed["example"] === "string" ? (parsed["example"] as string).trim() : "";
-  const contrast = typeof parsed["contrast"] === "string" ? (parsed["contrast"] as string).trim() : "";
-  const refs = typeof parsed["refs"] === "string" ? (parsed["refs"] as string).trim() : "";
+  let example = typeof parsed["example"] === "string" ? unescapeNewlines(parsed["example"] as string).trim() : "";
+  let contrast = typeof parsed["contrast"] === "string" ? unescapeNewlines(parsed["contrast"] as string).trim() : "";
+  const refs = typeof parsed["refs"] === "string" ? unescapeNewlines(parsed["refs"] as string).trim() : "";
+
+  // English-vocabulary learning: drop any code the model slipped in despite
+  // the prompt's "no code" rule. Treat contrast the same way since it tends
+  // to drift into technical comparisons for technical-sounding words.
+  if (isEnglishWord) {
+    if (looksLikeCode(example)) example = "";
+    if (looksLikeCode(contrast)) contrast = "";
+  } else if (looksLikeCode(example)) {
+    // For non-English subjects we keep the example (code is the legitimate
+    // use case), but still drop it if it's flagged as code by mistake.
+    example = "";
+  }
 
   const markdown = renderExpandedMarkdown({ subject, translation, pos, definition, points, example, contrast, refs });
 
@@ -213,6 +262,6 @@ function parseExpandedResponse(name: string, raw: string): ExpandedKnowledge {
     subject,
     translation,
     pos,
-    markdown: markdown || `# ${name}\n\n${raw.trim()}`,
+    markdown: markdown || `# ${name}\n\n${unescapeNewlines(raw.trim())}`,
   };
 }

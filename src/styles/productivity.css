@@ -1,18 +1,29 @@
 /* ============================================================
    Obsidian Worktable — Productivity Widgets
-   All rules scoped under .obsidian-worktable
+   All rules scoped under .worktable
    ============================================================ */
 
-.obsidian-worktable {
+.worktable {
   --accent: #3498db;
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
   color: var(--text-normal, #1a1a1a);
   box-sizing: border-box;
 }
 
+/* ── Dashboard grid ────────────────────────────────────────
+   每个模块独占一行;行间距 = 1 行文字高度(line-height: 1.6,所以 1.6em)。
+   padding-top 让首行(番茄钟)与上方 header 也保持 1 行空白。
+   ──────────────────────────────────────────────────────── */
+.worktable .worktable-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1.6em;
+  padding-top: 1.6em;
+}
+
 /* ── Pomodoro ─────────────────────────────────────────────── */
 
-.obsidian-worktable .pomo-widget-instance {
+.worktable .pomo-widget-instance {
   background: linear-gradient(135deg, var(--background-secondary, #f6f6f6) 0%, var(--background-primary, #fff) 100%);
   border: 1px solid var(--background-modifier-border, #d8d8d8);
   border-radius: 16px;
@@ -21,19 +32,19 @@
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
 }
 
-.obsidian-worktable .pomo-widget-instance[data-mode="work"]  { --accent: #e74c3c; }
-.obsidian-worktable .pomo-widget-instance[data-mode="short"] { --accent: #27ae60; }
-.obsidian-worktable .pomo-widget-instance[data-mode="long"]  { --accent: #3498db; }
-.obsidian-worktable .pomo-widget-instance[data-mode="custom"]{ --accent: #9b59b6; }
+.worktable .pomo-widget-instance[data-mode="work"]  { --accent: #e74c3c; }
+.worktable .pomo-widget-instance[data-mode="short"] { --accent: #27ae60; }
+.worktable .pomo-widget-instance[data-mode="long"]  { --accent: #3498db; }
+.worktable .pomo-widget-instance[data-mode="custom"]{ --accent: #9b59b6; }
 
-.obsidian-worktable .pomo-row {
+.worktable .pomo-row {
   display: flex;
   gap: 14px;
   align-items: stretch;
   flex-wrap: wrap;
 }
 
-.obsidian-worktable .pomo-left {
+.worktable .pomo-left {
   flex: 1 1 280px;
   min-width: 280px;
   display: flex;
@@ -41,7 +52,7 @@
   align-items: center;
 }
 
-.obsidian-worktable .pomo-right {
+.worktable .pomo-right {
   flex: 1 1 280px;
   min-width: 280px;
   display: flex;
@@ -49,27 +60,27 @@
   gap: 8px;
 }
 
-.obsidian-worktable .pomo-ring-wrap {
+.worktable .pomo-ring-wrap {
   position: relative;
   width: 220px;
   height: 220px;
   margin: 4px auto 8px;
 }
 
-.obsidian-worktable .pomo-ring-wrap svg {
+.worktable .pomo-ring-wrap svg {
   width: 100%;
   height: 100%;
   transform: rotate(-90deg);
   display: block;
 }
 
-.obsidian-worktable .pomo-ring-bg {
+.worktable .pomo-ring-bg {
   fill: none;
   stroke: var(--background-modifier-border, #d8d8d8);
   stroke-width: 10;
 }
 
-.obsidian-worktable .pomo-ring-fg {
+.worktable .pomo-ring-fg {
   fill: none;
   stroke: var(--accent);
   stroke-width: 10;
@@ -78,7 +89,7 @@
   filter: drop-shadow(0 0 8px var(--accent));
 }
 
-.obsidian-worktable .pomo-ring-center {
+.worktable .pomo-ring-center {
   position: absolute;
   inset: 0;
   display: flex;
@@ -88,7 +99,7 @@
   pointer-events: none;
 }
 
-.obsidian-worktable .pomo-time {
+.worktable .pomo-time {
   font-size: 48px;
   font-weight: 700;
   font-family: "JetBrains Mono", "Menlo", monospace;
@@ -96,20 +107,20 @@
   line-height: 1;
 }
 
-.obsidian-worktable .pomo-mode {
+.worktable .pomo-mode {
   margin-top: 8px;
   font-size: 13px;
   color: var(--text-muted, #666);
   letter-spacing: 1px;
 }
 
-.obsidian-worktable .pomo-count {
+.worktable .pomo-count {
   margin-top: 6px;
   font-size: 11px;
   color: var(--text-faint, #999);
 }
 
-.obsidian-worktable .pomo-modes {
+.worktable .pomo-modes {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
@@ -117,7 +128,7 @@
   margin: 4px 0;
 }
 
-.obsidian-worktable .pomo-mode-btn {
+.worktable .pomo-mode-btn {
   background: var(--background-primary, #fff);
   color: var(--text-normal, #1a1a1a);
   border: 1px solid var(--background-modifier-border, #d8d8d8);
@@ -128,17 +139,17 @@
   transition: all 0.2s;
 }
 
-.obsidian-worktable .pomo-mode-btn:hover {
+.worktable .pomo-mode-btn:hover {
   transform: translateY(-1px);
 }
 
-.obsidian-worktable .pomo-mode-btn.active {
+.worktable .pomo-mode-btn.active {
   background: var(--accent);
   color: white;
   border-color: var(--accent);
 }
 
-.obsidian-worktable .pomo-controls {
+.worktable .pomo-controls {
   display: flex;
   gap: 8px;
   justify-content: center;
@@ -146,7 +157,7 @@
   margin: 6px 0 4px;
 }
 
-.obsidian-worktable .pomo-ctrl {
+.worktable .pomo-ctrl {
   background: var(--background-primary, #fff);
   color: var(--text-normal, #1a1a1a);
   border: 1px solid var(--background-modifier-border, #d8d8d8);
@@ -159,31 +170,31 @@
   min-width: 84px;
 }
 
-.obsidian-worktable .pomo-ctrl:hover:not(:disabled) {
+.worktable .pomo-ctrl:hover:not(:disabled) {
   transform: translateY(-1px);
 }
 
-.obsidian-worktable .pomo-ctrl:disabled {
+.worktable .pomo-ctrl:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 
-.obsidian-worktable .pomo-ctrl.primary {
+.worktable .pomo-ctrl.primary {
   background: var(--accent);
   color: white;
   border-color: var(--accent);
 }
 
-.obsidian-worktable .pomo-ctrl.primary:hover:not(:disabled) {
+.worktable .pomo-ctrl.primary:hover:not(:disabled) {
   opacity: 0.9;
 }
 
-.obsidian-worktable .pomo-ctrl.ghost {
+.worktable .pomo-ctrl.ghost {
   padding: 8px 12px;
   min-width: 0;
 }
 
-.obsidian-worktable .pomo-custom {
+.worktable .pomo-custom {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -193,7 +204,7 @@
   margin: 4px 0;
 }
 
-.obsidian-worktable .pomo-custom input {
+.worktable .pomo-custom input {
   width: 70px;
   padding: 5px 8px;
   border: 1px solid var(--background-modifier-border, #d8d8d8);
@@ -204,7 +215,7 @@
   text-align: center;
 }
 
-.obsidian-worktable .pomo-options {
+.worktable .pomo-options {
   display: flex;
   gap: 14px;
   justify-content: center;
@@ -213,18 +224,18 @@
   color: var(--text-muted, #666);
 }
 
-.obsidian-worktable .pomo-options label {
+.worktable .pomo-options label {
   cursor: pointer;
   user-select: none;
 }
 
-.obsidian-worktable .pomo-options input {
+.worktable .pomo-options input {
   accent-color: var(--accent);
   margin-right: 4px;
   vertical-align: middle;
 }
 
-.obsidian-worktable .pomo-history {
+.worktable .pomo-history {
   border-top: 1px solid var(--background-modifier-border, #d8d8d8);
   padding-top: 10px;
   flex: 1 1 auto;
@@ -234,7 +245,7 @@
   max-height: 200px;
 }
 
-.obsidian-worktable .pomo-history h4 {
+.worktable .pomo-history h4 {
   margin: 0 0 6px;
   font-size: 12px;
   color: var(--text-muted, #666);
@@ -246,7 +257,7 @@
   font-weight: 600;
 }
 
-.obsidian-worktable .pomo-link-btn {
+.worktable .pomo-link-btn {
   background: none;
   border: none;
   color: var(--text-faint, #999);
@@ -257,11 +268,11 @@
   padding: 2px 6px;
 }
 
-.obsidian-worktable .pomo-link-btn:hover {
+.worktable .pomo-link-btn:hover {
   color: var(--accent);
 }
 
-.obsidian-worktable .pomo-history ul {
+.worktable .pomo-history ul {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -270,7 +281,7 @@
   font-size: 11px;
 }
 
-.obsidian-worktable .pomo-history li {
+.worktable .pomo-history li {
   display: flex;
   justify-content: space-between;
   padding: 4px 6px;
@@ -278,62 +289,83 @@
   color: var(--text-muted, #666);
 }
 
-.obsidian-worktable .pomo-history li:last-child {
+.worktable .pomo-history li:last-child {
   border-bottom: none;
 }
 
-.obsidian-worktable .pomo-pill {
+.worktable .pomo-pill {
   padding: 1px 6px;
   border-radius: 4px;
   font-size: 10px;
   margin-right: 6px;
 }
 
-.obsidian-worktable .pomo-pill.work    { background: rgba(231, 76, 60, 0.18);  color: #c0392b; }
-.obsidian-worktable .pomo-pill.short   { background: rgba(39, 174, 96, 0.18);  color: #16a085; }
-.obsidian-worktable .pomo-pill.long    { background: rgba(52, 152, 219, 0.18); color: #2471a3; }
-.obsidian-worktable .pomo-pill.custom  { background: rgba(155, 89, 182, 0.18); color: #884ea0; }
+.worktable .pomo-pill.work    { background: rgba(231, 76, 60, 0.18);  color: #c0392b; }
+.worktable .pomo-pill.short   { background: rgba(39, 174, 96, 0.18);  color: #16a085; }
+.worktable .pomo-pill.long    { background: rgba(52, 152, 219, 0.18); color: #2471a3; }
+.worktable .pomo-pill.custom  { background: rgba(155, 89, 182, 0.18); color: #884ea0; }
 
-.obsidian-worktable .pomo-stats {
+.worktable .pomo-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 4px 0 8px;
+}
+
+.worktable .pomo-stats-row {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
-  margin: 4px 0 8px;
   text-align: center;
 }
 
-.obsidian-worktable .pomo-stat {
+.worktable .pomo-stat {
   padding: 8px 4px;
   background: var(--background-primary, #fff);
   border: 1px solid var(--background-modifier-border, #d8d8d8);
   border-radius: 8px;
 }
 
-.obsidian-worktable .pomo-stat-v {
+.worktable .pomo-stats-row.avg .pomo-stat {
+  padding: 6px 4px;
+  background: var(--background-secondary, #f5f5f5);
+  border-style: dashed;
+}
+
+.worktable .pomo-stat-v {
   font-size: 18px;
   font-weight: 700;
   color: var(--accent);
 }
 
-.obsidian-worktable .pomo-stat-l {
+.worktable .pomo-stats-row.avg .pomo-stat-v {
+  font-size: 14px;
+  color: var(--text-muted, #666);
+}
+
+.worktable .pomo-stat-l {
   font-size: 10px;
   color: var(--text-faint, #999);
   text-transform: uppercase;
 }
 
-.obsidian-worktable .pomo-db-status {
+.worktable .pomo-stats-row.avg .pomo-stat-l {
+  font-size: 9px;
+}
+
+.worktable .pomo-db-status {
   text-align: center;
   font-size: 10px;
   color: var(--text-faint, #999);
   margin-top: 6px;
 }
 
-.obsidian-worktable .pomo-db-status.ok::before  { content: "🟢 "; }
-.obsidian-worktable .pomo-db-status.err::before { content: "🔴 "; }
+.worktable .pomo-db-status.ok::before  { content: "🟢 "; }
+.worktable .pomo-db-status.err::before { content: "🔴 "; }
 
 /* ── Todo ─────────────────────────────────────────────────── */
 
-.obsidian-worktable .home-todo {
+.worktable .home-todo {
   background: linear-gradient(135deg, var(--background-secondary, #f6f6f6) 0%, var(--background-primary, #fff) 100%);
   border: 1px solid var(--background-modifier-border, #d8d8d8);
   border-radius: 16px;
@@ -342,13 +374,13 @@
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
 }
 
-.obsidian-worktable .home-todo-input {
+.worktable .home-todo-input {
   display: flex;
   gap: 6px;
   margin: 8px 0;
 }
 
-.obsidian-worktable .home-todo-input input[type="text"] {
+.worktable .home-todo-input input[type="text"] {
   flex: 1;
   padding: 8px 10px;
   border: 1px solid var(--background-modifier-border, #d8d8d8);
@@ -358,7 +390,7 @@
   font-size: 13px;
 }
 
-.obsidian-worktable .home-todo-input select {
+.worktable .home-todo-input select {
   padding: 8px;
   border: 1px solid var(--background-modifier-border, #d8d8d8);
   border-radius: 8px;
@@ -368,7 +400,7 @@
   cursor: pointer;
 }
 
-.obsidian-worktable .home-todo-input button {
+.worktable .home-todo-input button {
   padding: 8px 14px;
   border: none;
   background: #3498db;
@@ -379,20 +411,20 @@
   font-weight: 500;
 }
 
-.obsidian-worktable .home-todo-input button:hover {
+.worktable .home-todo-input button:hover {
   opacity: 0.9;
 }
 
-.obsidian-worktable .home-todo-priority {
+.worktable .home-todo-priority {
   border-radius: 6px;
   overflow: hidden;
 }
 
-.obsidian-worktable .home-todo-section {
+.worktable .home-todo-section {
   margin: 8px 0;
 }
 
-.obsidian-worktable .home-todo-section-h {
+.worktable .home-todo-section-h {
   font-size: 11px;
   color: var(--text-muted, #666);
   text-transform: uppercase;
@@ -403,12 +435,12 @@
   align-items: center;
 }
 
-.obsidian-worktable .home-todo-section-h .ct {
+.worktable .home-todo-section-h .ct {
   font-weight: 600;
   color: var(--accent, #3498db);
 }
 
-.obsidian-worktable .home-todo-section-h button {
+.worktable .home-todo-section-h button {
   background: none;
   border: none;
   color: var(--text-faint, #999);
@@ -417,11 +449,11 @@
   padding: 0 4px;
 }
 
-.obsidian-worktable .home-todo-section-h button:hover {
+.worktable .home-todo-section-h button:hover {
   color: #e74c3c;
 }
 
-.obsidian-worktable .home-todo-item {
+.worktable .home-todo-item {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -433,15 +465,15 @@
   font-size: 13px;
 }
 
-.obsidian-worktable .home-todo-item.done {
+.worktable .home-todo-item.done {
   opacity: 0.5;
 }
 
-.obsidian-worktable .home-todo-item.done .home-todo-text {
+.worktable .home-todo-item.done .home-todo-text {
   text-decoration: line-through;
 }
 
-.obsidian-worktable .home-todo-check {
+.worktable .home-todo-check {
   cursor: pointer;
   font-size: 20px;
   width: 28px;
@@ -458,33 +490,33 @@
   border-radius: 6px;
 }
 
-.obsidian-worktable .home-todo-check:hover {
+.worktable .home-todo-check:hover {
   color: #27ae60;
 }
 
-.obsidian-worktable .home-todo-check.checked {
+.worktable .home-todo-check.checked {
   color: #27ae60;
 }
 
-.obsidian-worktable .home-todo-prio-pill {
+.worktable .home-todo-prio-pill {
   font-size: 10px;
   padding: 2px 5px;
   border-radius: 3px;
   font-weight: 600;
 }
 
-.obsidian-worktable .home-todo-prio-pill.P0 { background: rgba(231, 76, 60, 0.18);  color: #c0392b; }
-.obsidian-worktable .home-todo-prio-pill.P1 { background: rgba(243, 156, 18, 0.18); color: #d68910; }
-.obsidian-worktable .home-todo-prio-pill.P2 { background: rgba(52, 152, 219, 0.18); color: #2471a3; }
-.obsidian-worktable .home-todo-prio-pill.P3 { background: rgba(149, 165, 166, 0.18); color: #7f8c8d; }
+.worktable .home-todo-prio-pill.P0 { background: rgba(231, 76, 60, 0.18);  color: #c0392b; }
+.worktable .home-todo-prio-pill.P1 { background: rgba(243, 156, 18, 0.18); color: #d68910; }
+.worktable .home-todo-prio-pill.P2 { background: rgba(52, 152, 219, 0.18); color: #2471a3; }
+.worktable .home-todo-prio-pill.P3 { background: rgba(149, 165, 166, 0.18); color: #7f8c8d; }
 
-.obsidian-worktable .home-todo-text {
+.worktable .home-todo-text {
   flex: 1;
   color: var(--text-normal, #1a1a1a);
   word-break: break-word;
 }
 
-.obsidian-worktable .home-todo-text input {
+.worktable .home-todo-text input {
   width: 100%;
   padding: 4px 6px;
   border: 1px solid var(--background-modifier-border, #d8d8d8);
@@ -494,12 +526,12 @@
   font-size: 13px;
 }
 
-.obsidian-worktable .home-todo-actions {
+.worktable .home-todo-actions {
   display: flex;
   gap: 2px;
 }
 
-.obsidian-worktable .home-todo-actions button {
+.worktable .home-todo-actions button {
   background: none;
   border: none;
   color: var(--text-faint, #999);
@@ -508,15 +540,15 @@
   padding: 2px 6px;
 }
 
-.obsidian-worktable .home-todo-actions button:hover {
+.worktable .home-todo-actions button:hover {
   color: #e74c3c;
 }
 
-.obsidian-worktable .home-todo-actions button.edit:hover {
+.worktable .home-todo-actions button.edit:hover {
   color: #3498db;
 }
 
-.obsidian-worktable .home-todo-empty {
+.worktable .home-todo-empty {
   padding: 14px;
   text-align: center;
   color: var(--text-faint, #999);
@@ -526,7 +558,7 @@
 
 /* ── Flowers ──────────────────────────────────────────────── */
 
-.obsidian-worktable .home-flowers {
+.worktable .home-flowers {
   box-sizing: border-box;
   padding: 20px;
   margin: 12px 0;
@@ -536,27 +568,27 @@
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
 }
 
-.obsidian-worktable .home-flowers h3 {
+.worktable .home-flowers h3 {
   margin: 0 0 10px;
   font-size: 16px;
   color: var(--text-normal, #1a1a1a);
 }
 
-.obsidian-worktable .flowers-head {
+.worktable .flowers-head {
   text-align: center;
   padding: 8px 0 14px;
   border-bottom: 1px dashed var(--background-modifier-border, #d8d8d8);
   margin-bottom: 10px;
 }
 
-.obsidian-worktable .flower-count {
+.worktable .flower-count {
   font-size: 42px;
   font-weight: 700;
   color: #e91e63;
   line-height: 1;
 }
 
-.obsidian-worktable .flower-count .icon {
+.worktable .flower-count .icon {
   display: inline-block;
   animation: bloom 0.6s ease-out;
 }
@@ -567,7 +599,7 @@
   100% { transform: scale(1);   opacity: 1; }
 }
 
-.obsidian-worktable .flower-label {
+.worktable .flower-label {
   font-size: 11px;
   color: var(--text-muted, #666);
   letter-spacing: 2px;
@@ -575,19 +607,19 @@
   margin-top: 4px;
 }
 
-.obsidian-worktable .flower-meta {
+.worktable .flower-meta {
   font-size: 11px;
   color: var(--text-faint, #999);
   margin-top: 6px;
 }
 
-.obsidian-worktable .archives-list {
+.worktable .archives-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.obsidian-worktable .archive-item {
+.worktable .archive-item {
   padding: 8px 10px;
   background: var(--background-primary, #fff);
   border: 1px solid var(--background-modifier-border, #d8d8d8);
@@ -597,19 +629,19 @@
   transition: all 0.15s;
 }
 
-.obsidian-worktable .archive-item:hover {
+.worktable .archive-item:hover {
   border-color: #e91e63;
   transform: translateX(2px);
 }
 
-.obsidian-worktable .archive-head {
+.worktable .archive-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 4px;
 }
 
-.obsidian-worktable .archive-title {
+.worktable .archive-title {
   font-size: 12px;
   font-weight: 600;
   color: var(--text-normal, #1a1a1a);
@@ -619,31 +651,31 @@
   max-width: 75%;
 }
 
-.obsidian-worktable .archive-badge {
+.worktable .archive-badge {
   font-size: 10px;
   padding: 1px 6px;
   border-radius: 4px;
   font-weight: 600;
 }
 
-.obsidian-worktable .archive-badge.ok  { background: rgba(39, 174, 96, 0.18);  color: #16a085; }
-.obsidian-worktable .archive-badge.err { background: rgba(231, 76, 60, 0.18);  color: #c0392b; }
+.worktable .archive-badge.ok  { background: rgba(39, 174, 96, 0.18);  color: #16a085; }
+.worktable .archive-badge.err { background: rgba(231, 76, 60, 0.18);  color: #c0392b; }
 
-.obsidian-worktable .archive-q {
+.worktable .archive-q {
   font-size: 11px;
   color: var(--text-muted, #666);
   line-height: 1.4;
   margin: 4px 0;
 }
 
-.obsidian-worktable .archive-foot {
+.worktable .archive-foot {
   display: flex;
   justify-content: space-between;
   font-size: 10px;
   color: var(--text-faint, #999);
 }
 
-.obsidian-worktable .archive-empty {
+.worktable .archive-empty {
   padding: 20px;
   text-align: center;
   color: var(--text-faint, #999);
@@ -654,7 +686,7 @@
   border: 1px dashed var(--background-modifier-border, #d8d8d8);
 }
 
-.obsidian-worktable .archive-detail {
+.worktable .archive-detail {
   display: none;
   padding: 8px 10px;
   background: var(--background-secondary, #f6f6f6);
@@ -666,13 +698,13 @@
   color: var(--text-muted, #666);
 }
 
-.obsidian-worktable .archive-item.open .archive-detail {
+.worktable .archive-item.open .archive-detail {
   display: block;
 }
 
 /* ── News ─────────────────────────────────────────────────── */
 
-.obsidian-worktable .home-news {
+.worktable .home-news {
   box-sizing: border-box;
   padding: 20px;
   margin: 12px 0;
@@ -682,7 +714,7 @@
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
 }
 
-.obsidian-worktable .home-news-toolbar {
+.worktable .home-news-toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -691,11 +723,11 @@
   color: var(--text-muted, #666);
 }
 
-.obsidian-worktable .home-news-toolbar .home-news-info {
+.worktable .home-news-toolbar .home-news-info {
   font-weight: 600;
 }
 
-.obsidian-worktable .home-news-toolbar button {
+.worktable .home-news-toolbar button {
   background: transparent;
   border: 1px solid var(--background-modifier-border, #d8d8d8);
   color: var(--text-muted, #666);
@@ -705,18 +737,18 @@
   font-size: 11px;
 }
 
-.obsidian-worktable .home-news-toolbar button:hover {
+.worktable .home-news-toolbar button:hover {
   color: #e74c3c;
   border-color: #e74c3c;
 }
 
-.obsidian-worktable .home-news-list {
+.worktable .home-news-list {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-.obsidian-worktable .home-news-item {
+.worktable .home-news-item {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -727,12 +759,12 @@
   transition: all 0.2s;
 }
 
-.obsidian-worktable .home-news-item:hover {
+.worktable .home-news-item:hover {
   border-color: #3498db;
   transform: translateX(2px);
 }
 
-.obsidian-worktable .home-news-title {
+.worktable .home-news-title {
   flex: 1;
   font-size: 13px;
   color: var(--text-normal, #1a1a1a);
@@ -742,11 +774,11 @@
   white-space: nowrap;
 }
 
-.obsidian-worktable .home-news-title:hover {
+.worktable .home-news-title:hover {
   color: #3498db;
 }
 
-.obsidian-worktable .home-news-tag {
+.worktable .home-news-tag {
   font-size: 10px;
   padding: 2px 6px;
   border-radius: 4px;
@@ -754,16 +786,16 @@
   color: #2471a3;
 }
 
-.obsidian-worktable .home-news-tag.tech  { background: rgba(155, 89, 182, 0.15); color: #884ea0; }
-.obsidian-worktable .home-news-tag.world { background: rgba(231, 76, 60, 0.15);  color: #c0392b; }
+.worktable .home-news-tag.tech  { background: rgba(155, 89, 182, 0.15); color: #884ea0; }
+.worktable .home-news-tag.world { background: rgba(231, 76, 60, 0.15);  color: #c0392b; }
 
-.obsidian-worktable .home-news-date {
+.worktable .home-news-date {
   font-size: 11px;
   color: var(--text-faint, #999);
   min-width: 80px;
 }
 
-.obsidian-worktable .home-news-mark {
+.worktable .home-news-mark {
   background: transparent;
   border: 1px solid var(--background-modifier-border, #d8d8d8);
   color: var(--text-muted, #666);
@@ -774,13 +806,13 @@
   transition: all 0.15s;
 }
 
-.obsidian-worktable .home-news-mark:hover {
+.worktable .home-news-mark:hover {
   background: #27ae60;
   color: #fff;
   border-color: #27ae60;
 }
 
-.obsidian-worktable .home-news-empty {
+.worktable .home-news-empty {
   padding: 24px;
   text-align: center;
   color: var(--text-faint, #999);

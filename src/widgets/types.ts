@@ -4,10 +4,13 @@ import type { WorktableSettings } from "../settings";
 export type WidgetId =
   | "pomodoro"
   | "todo"
-  | "learning"
+  | "inquiry"
+  | "active-recall"
   | "flowers"
   | "review"
-  | "news";
+  | "news"
+  /** @deprecated legacy single-widget id kept for migration only; superseded by `inquiry` + `active-recall`. */
+  | "learning";
 
 export interface WidgetContext {
   app: App;

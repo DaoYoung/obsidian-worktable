@@ -51,15 +51,47 @@ export function keyPointsExtractionPrompt(title: string, text: string, maxPoints
 
 export function knowledgeExpandPrompt(name: string, context: string): { system: string; user: string } {
   const snippet = context.trim().slice(0, 4000);
-  const isEnglishWord = /^[A-Za-z][A-Za-z'\-]{0,30}$/.test((name || "").trim());
-  const subjectHint = isEnglishWord
-    ? '"subject": "英文词汇"（1-3 句中文翻译,放 translation 字段；pos: n./v./adj./adv. 等）'
-    : '"subject": 一个简洁中文学科标签,如 数学 / 物理 / 化学 / 生物 / 历史 / 地理 / 政治 / 语文 / 经济 / 哲学 / 心理学 / 计算机 / 其他';
+  // Foreign-vocabulary detection: short input with no Chinese but Latin letters
+  // → treat as foreign-language learning and focus on the Chinese translation.
+  const trimmedName = (name || "").trim();
+  const hasCjk = /[一-鿿]/.test(trimmedName);
+  const hasLatin = /[A-Za-zÀ-ɏ]/.test(trimmedName);
+  const isEnglishWord = !hasCjk && hasLatin && trimmedName.length <= 40;
+  if (isEnglishWord) {
+    // English-vocabulary learning: the user typed an English word and wants
+    // to learn its Chinese meaning. The subject hint alone isn't enough — for
+    // words that double as technical terms (e.g. "spawn" → Python
+    // multiprocessing) the model still drifts into code examples unless the
+    // whole prompt is unambiguous about vocabulary-only output.
+    const system =
+      "你是一个英文单词学习助手,负责把用户输入的英文单词整理成中文词汇卡片。" +
+      "请严格只返回 JSON 对象,不要任何其他文字、注释、Markdown 代码块。" +
+      "重要:用户输入的是英文单词,目的是学习它的中文含义,不是查任何技术文档。" +
+      "如果这个词恰好也是某个编程/技术/API 中的术语(例如 'spawn' 在 Python " +
+      "multiprocessing、Unreal Engine、游戏引擎中等),完全忽略那些技术含义," +
+      "只把它当作一个普通英语单词来解释。";
+    const user =
+      `英文单词:${trimmedName}\n\n` +
+      (snippet ? `额外参考上下文:\n${snippet}\n\n` : "") +
+      "请用 JSON 返回这个英文单词的学习卡片(只解释作为英文单词的含义,不要写任何代码、不要举编程/技术示例):\n" +
+      '  "subject": "英文词汇"\n' +
+      '  "translation": 1-3 句中文释义(必填,例如「产卵;大量产生;引发」这种常规英文词汇含义)\n' +
+      '  "pos": 词性(必填,n./v./adj./adv./prep./conj./pron./num./art./aux./interj.)\n' +
+      '  "definition": 1-2 句中文解释,告诉用户这个单词在英文里通常怎么用(不要写代码、不要解释技术用法)\n' +
+      '  "points": 3-5 条关键要点,每条都是中文,围绕单词本身的含义、常见搭配、近义词等\n' +
+      '  "example": 留空字符串 "" —— 英文单词场景下不需要示例字段\n' +
+      '  "contrast": 与意思相近的英文单词的区别(可选,可以空字符串)\n' +
+      '  "refs": 参考资料(可选,可以空字符串)\n\n' +
+      '{"subject":"英文词汇","translation":"...","pos":"...","definition":"...","points":["...","..."],"example":"","contrast":"...","refs":"..."}\n';
+    return { system, user };
+  }
+  const subjectHint =
+    '"subject": 一个简洁中文学科标签,如 数学 / 物理 / 化学 / 生物 / 历史 / 地理 / 政治 / 语文 / 经济 / 哲学 / 心理学 / 计算机 / 其他';
   const system =
     "你是一个知识整理助手。请严格只返回 JSON 对象,不要任何其他文字、注释、Markdown 代码块。" +
     "内容准确、简洁、有结构,不要编造不存在的引用。";
   const user =
-    `知识点名称:${name}\n\n` +
+    `知识点名称:${trimmedName}\n\n` +
     (snippet ? `额外参考上下文:\n${snippet}\n\n` : "") +
     "请用 JSON 返回一个知识点的结构化解释,字段如下:\n" +
     `  ${subjectHint}\n` +

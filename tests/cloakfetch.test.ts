@@ -216,7 +216,7 @@ describe("CloakfetchClient - direct AI routing", () => {
     vi.unstubAllGlobals();
   });
 
-  it("routes expand to the direct AI client when AI settings are filled", async () => {
+  it("routes expand to the direct AI client when AI settings point at the official endpoint", async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
         content: [
@@ -236,7 +236,8 @@ describe("CloakfetchClient - direct AI routing", () => {
     const client = new CloakfetchClient({
       ...baseSettings,
       aiApiKey: "sk-direct",
-      aiBaseUrl: "https://api.example.com",
+      // baseSettings already sets aiBaseUrl to the official Anthropic URL;
+      // passing the configured value verbatim keeps the test honest.
       aiModel: "claude-direct",
     });
     const entry = await client.expand("ephemeral", "context");
@@ -245,8 +246,36 @@ describe("CloakfetchClient - direct AI routing", () => {
     expect(entry.pos).toBe("adj.");
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url] = fetchMock.mock.calls[0] as [string];
-    expect(url).toBe("https://api.example.com/v1/messages");
+    expect(url).toBe("https://api.anthropic.com/v1/messages");
     expect(url).not.toContain("127.0.0.1:8765");
+  });
+
+  it("falls back to the local service when AI baseUrl is a third-party proxy (CORS-unsafe)", async () => {
+    // Direct browser → api.example.com would be blocked by preflight because
+    // the proxy doesn't whitelist `anthropic-version` in
+    // Access-Control-Allow-Headers. The client must transparently fall
+    // through to the local Cloakfetch service.
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        ok: true,
+        subject: "数学",
+        translation: "",
+        pos: "",
+        markdown: "# Math",
+      }),
+    );
+    const client = new CloakfetchClient({
+      ...baseSettings,
+      aiApiKey: "sk-direct",
+      aiBaseUrl: "https://api.minimaxi.com/anthropic",
+      aiModel: "MiniMax-M3",
+    });
+    const entry = await client.expand("fraction", "");
+    expect(entry.subject).toBe("数学");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(url).toContain("127.0.0.1:8765");
+    expect(url).toContain("/ai/expand");
   });
 
   it("routes generateQuestions to direct AI when configured", async () => {

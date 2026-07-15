@@ -57,7 +57,7 @@ export class WorktableSettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.addClass("obsidian-worktable-settings");
+    containerEl.addClass("worktable-settings");
 
     // Resolve labels per render. The settings tab re-renders whenever the
     // user opens it (and after a language change), so we don't need to
