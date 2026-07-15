@@ -12,11 +12,13 @@
 
 /* ── Dashboard grid ────────────────────────────────────────
    每个模块独占一行;行间距 = 1 行文字高度(line-height: 1.6,所以 1.6em)。
+   padding-top 让首行(番茄钟)与上方 header 也保持 1 行空白。
    ──────────────────────────────────────────────────────── */
 .worktable .worktable-grid {
   display: flex;
   flex-direction: column;
   gap: 1.6em;
+  padding-top: 1.6em;
 }
 
 /* ── Pomodoro ─────────────────────────────────────────────── */
