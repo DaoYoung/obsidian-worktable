@@ -47,8 +47,12 @@ jobs:
       # Attest only the three files Obsidian recognizes. The manual-install
       # zip is a convenience bundle for non-BRAT users and is excluded so
       # the attestation subject list stays scoped to the artifacts Obsidian
-      # actually reads from the release.
+      # actually reads from the release. Disabled with `if: false` —
+      # actions/attest@v1 requires the repo's Artifact Attestations setting
+      # to be enabled, which is not yet turned on for this repo. Re-enable
+      # by removing the `if: false` line once that setting is on.
       - name: Attest build provenance
+        if: false
         uses: actions/attest@v1
         with:
           subject-path: |
