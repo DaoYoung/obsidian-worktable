@@ -1,13 +1,8 @@
 import type { WidgetContext } from "../types";
 import type { HomeDb } from "../storage/homeDb";
+import { clearChildren, el } from "../utils/dom";
 
 const FLOWERS_KEY = "home-learning-flowers";
-
-function escapeHtml(s: string): string {
-  return String(s == null ? "" : s).replace(/[<>"'&]/g, (c) =>
-    ({ "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;", "&": "&amp;" }[c] ?? c)
-  );
-}
 
 function fmtTime(ts: number): string {
   const d = new Date(ts);
@@ -38,7 +33,7 @@ export function mountFlowersWidget(containerEl: HTMLElement, context: WidgetCont
   headDiv.appendChild(flowerCountDiv);
 
   const flowerIcon = document.createElement("span");
-  flowerIcon.className = "icon";
+  flowerIcon.className = "icon bloom";
   flowerIcon.id = "flower-icon";
   flowerIcon.textContent = "🌸";
   flowerCountDiv.appendChild(flowerIcon);
@@ -60,18 +55,17 @@ export function mountFlowersWidget(containerEl: HTMLElement, context: WidgetCont
 
   // Archives header
   const archivesHeader = document.createElement("div");
-  archivesHeader.style.cssText = "display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;";
+  archivesHeader.className = "flowers-archive-head";
   wrap.appendChild(archivesHeader);
 
   const archivesTitle = document.createElement("span");
-  archivesTitle.style.cssText =
-    "font-size:11px;color:var(--text-muted,#666);text-transform:uppercase;letter-spacing:1px;font-weight:600;";
+  archivesTitle.className = "flowers-archive-title";
   archivesTitle.textContent = "📚 最近归档";
   archivesHeader.appendChild(archivesTitle);
 
   const btnClear = document.createElement("button");
   btnClear.id = "btn-clear-flowers";
-  btnClear.style.cssText = "background:transparent;border:none;color:var(--text-faint,#999);cursor:pointer;font-size:10px;";
+  btnClear.className = "flowers-clear-btn";
   btnClear.textContent = "🗑 重置";
   archivesHeader.appendChild(btnClear);
 
@@ -85,9 +79,9 @@ export function mountFlowersWidget(containerEl: HTMLElement, context: WidgetCont
   function renderFlowers(): void {
     const total = parseInt(localStorage.getItem(FLOWERS_KEY) || "0");
     flowerCount.textContent = String(total);
-    flowerIcon.style.animation = "none";
+    flowerIcon.classList.remove("bloom");
     void flowerIcon.offsetWidth;
-    flowerIcon.style.animation = "";
+    flowerIcon.classList.add("bloom");
   }
 
   function renderArchives(records: Array<{
@@ -101,9 +95,19 @@ export function mountFlowersWidget(containerEl: HTMLElement, context: WidgetCont
     correctAnswer?: string;
     createdAt?: number;
   }>): void {
+    clearChildren(archivesList);
+
     if (!records || records.length === 0) {
-      archivesList.innerHTML =
-        '<div class="archive-empty">📭 还没有归档的学习记录<br><small>完成一次学习后会自动出现在这里</small></div>';
+      archivesList.appendChild(
+        el("div", {
+          className: "archive-empty",
+          children: [
+            "📭 还没有归档的学习记录",
+            el("br"),
+            el("small", { text: "完成一次学习后会自动出现在这里" }),
+          ],
+        })
+      );
       return;
     }
 
@@ -111,70 +115,100 @@ export function mountFlowersWidget(containerEl: HTMLElement, context: WidgetCont
     const showAll = archivesExpanded || total <= 1;
     const recent = showAll ? records : records.slice(0, 1);
 
-    let itemsHtml = recent
-      .map((r) => {
-        const ok = r.correct;
-        const date = fmtTime(r.createdAt || 0);
-        const qPreview =
-          (r.question || "").slice(0, 50) + ((r.question || "").length > 50 ? "…" : "");
-        return `<div class="archive-item" data-idx="${records.indexOf(r)}">
-        <div class="archive-head">
-          <span class="archive-title" title="${escapeHtml(r.title || r.url || "")}">${escapeHtml(
-          r.title || r.url || ""
-        )}</span>
-          <span class="archive-badge ${ok ? "ok" : "err"}">${ok ? "✓ 对" : "✗ 错"}</span>
-        </div>
-        <div class="archive-q">Q: ${escapeHtml(qPreview)}</div>
-        <div class="archive-foot">
-          <span>${date}</span>
-          <span>${r.questionType === "mc" ? "🔘 选择" : "✏️ 问答"}</span>
-        </div>
-        <div class="archive-detail">
-          <b>题目:</b> ${escapeHtml(r.question || "")}<br>
-          <b>你的答案:</b> ${escapeHtml(r.userAnswer || "(空)")}<br>
-          <b>参考答案:</b> ${escapeHtml(r.correctAnswer || "")}<br>
-          <b>来源:</b> <a href="${escapeHtml(r.url || "")}" target="_blank" style="color:#3498db;">${escapeHtml(r.url || "")}</a>
-        </div>
-      </div>`;
-      })
-      .join("");
+    recent.forEach((r, idx) => {
+      const ok = !!r.correct;
+      const date = fmtTime(r.createdAt || 0);
+      const qPreview =
+        (r.question || "").slice(0, 50) + ((r.question || "").length > 50 ? "…" : "");
+      const realIdx = records.indexOf(r);
 
-    let toggleHtml = "";
-    if (!showAll && total > 1) {
-      toggleHtml = `<button id="archives-expand-btn" style="margin-top:6px;padding:5px 10px;background:transparent;border:1px dashed var(--background-modifier-border,#d8d8d8);border-radius:6px;color:var(--text-muted,#666);font-size:11px;cursor:pointer;width:100%;">📂 展开更多 (还有 ${
-        total - 1
-      } 条)</button>`;
-    } else if (showAll && total > 1) {
-      toggleHtml = `<button id="archives-collapse-btn" style="margin-top:6px;padding:5px 10px;background:transparent;border:1px dashed var(--background-modifier-border,#d8d8d8);border-radius:6px;color:var(--text-muted,#666);font-size:11px;cursor:pointer;width:100%;">🔼 只看最近 1 条</button>`;
-    }
-
-    archivesList.innerHTML = itemsHtml + toggleHtml;
-
-    // Archive item click → expand detail
-    archivesList.querySelectorAll<HTMLElement>(".archive-item").forEach((el) => {
-      component.registerDomEvent(el, "click", () => {
-        el.classList.toggle("open");
+      const detailUrl = r.url ? r.url : "";
+      const archiveItem = el("div", {
+        className: "archive-item",
+        attrs: { "data-idx": String(realIdx) },
+        children: [
+          el("div", {
+            className: "archive-head",
+            children: [
+              el("span", {
+                className: "archive-title",
+                text: r.title || r.url || "",
+                attrs: { title: r.title || r.url || "" },
+              }),
+              el("span", {
+                className: ok ? "archive-badge ok" : "archive-badge err",
+                text: ok ? "✓ 对" : "✗ 错",
+              }),
+            ],
+          }),
+          el("div", {
+            className: "archive-q",
+            children: ["Q: ", qPreview],
+          }),
+          el("div", {
+            className: "archive-foot",
+            children: [
+              el("span", { text: date }),
+              el("span", { text: r.questionType === "mc" ? "🔘 选择" : "✏️ 问答" }),
+            ],
+          }),
+          el("div", {
+            className: "archive-detail",
+            children: [
+              el("b", { text: "题目:" }),
+              " ",
+              r.question || "",
+              el("br"),
+              el("b", { text: "你的答案:" }),
+              " ",
+              r.userAnswer || "(空)",
+              el("br"),
+              el("b", { text: "参考答案:" }),
+              " ",
+              r.correctAnswer || "",
+              el("br"),
+              el("b", { text: "来源:" }),
+              " ",
+              detailUrl
+                ? el("a", {
+                    attrs: { href: detailUrl, target: "_blank", rel: "noopener" },
+                    text: detailUrl,
+                  })
+                : "",
+            ],
+          }),
+        ],
       });
+
+      component.registerDomEvent(archiveItem, "click", () => {
+        archiveItem.classList.toggle("open");
+      });
+      archivesList.appendChild(archiveItem);
+      void idx;
     });
 
-    // Expand button
-    const expandBtn = archivesList.querySelector<HTMLElement>("#archives-expand-btn");
-    if (expandBtn) {
+    if (!showAll && total > 1) {
+      const expandBtn = el("button", {
+        attrs: { id: "archives-expand-btn", type: "button" },
+        text: `📂 展开更多 (还有 ${total - 1} 条)`,
+      });
       component.registerDomEvent(expandBtn, "click", (e) => {
         e.stopPropagation();
         archivesExpanded = true;
         void refresh();
       });
-    }
-
-    // Collapse button
-    const collapseBtn = archivesList.querySelector<HTMLElement>("#archives-collapse-btn");
-    if (collapseBtn) {
+      archivesList.appendChild(expandBtn);
+    } else if (showAll && total > 1) {
+      const collapseBtn = el("button", {
+        attrs: { id: "archives-collapse-btn", type: "button" },
+        text: "🔼 只看最近 1 条",
+      });
       component.registerDomEvent(collapseBtn, "click", (e) => {
         e.stopPropagation();
         archivesExpanded = false;
         void refresh();
       });
+      archivesList.appendChild(collapseBtn);
     }
   }
 
@@ -186,7 +220,13 @@ export function mountFlowersWidget(containerEl: HTMLElement, context: WidgetCont
         renderArchives(recs);
       }
     } catch (e) {
-      archivesList.innerHTML = `<div class="archive-empty">⚠ 加载失败: ${escapeHtml(String(e))}</div>`;
+      clearChildren(archivesList);
+      archivesList.appendChild(
+        el("div", {
+          className: "archive-empty",
+          text: `⚠ 加载失败: ${e instanceof Error ? e.message : String(e)}`,
+        })
+      );
     }
   }
 

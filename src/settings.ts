@@ -65,9 +65,9 @@ export class WorktableSettingTab extends PluginSettingTab {
     // reading the active UI locale.
     const t = getSettingsStrings(moment.locale() ?? null);
 
-    containerEl.createEl("h2", { text: t.heading });
+    new Setting(containerEl).setName(t.heading).setHeading();
 
-    containerEl.createEl("h3", { text: t.pathSection });
+    new Setting(containerEl).setName(t.pathSection).setHeading();
 
     new Setting(containerEl)
       .setName(t.knowledgeFileName)
@@ -99,7 +99,7 @@ export class WorktableSettingTab extends PluginSettingTab {
     // section so first-time users see that they can use AI features without
     // running any local server. The Learning widget shows a matching banner
     // that flips between "active" and "inactive" depending on this config.
-    containerEl.createEl("h3", { text: t.directAiSection });
+    new Setting(containerEl).setName(t.directAiSection).setHeading();
     containerEl.createEl("p", {
       cls: "setting-item-description",
       text: t.directAiIntro,
@@ -178,7 +178,7 @@ export class WorktableSettingTab extends PluginSettingTab {
         : t.aiStatusInactive,
     );
 
-    containerEl.createEl("h3", { text: t.serviceSection });
+    new Setting(containerEl).setName(t.serviceSection).setHeading();
 
     new Setting(containerEl)
       .setName(t.serviceBaseUrlName)

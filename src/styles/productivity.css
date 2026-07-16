@@ -590,7 +590,33 @@
 
 .worktable .flower-count .icon {
   display: inline-block;
+}
+
+.worktable .flower-count .icon.bloom {
   animation: bloom 0.6s ease-out;
+}
+
+.worktable .flowers-archive-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.worktable .flowers-archive-title {
+  font-size: 11px;
+  color: var(--text-muted, #666);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 600;
+}
+
+.worktable .flowers-clear-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-faint, #999);
+  cursor: pointer;
+  font-size: 10px;
 }
 
 @keyframes bloom {

@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: write
+  attestations: write
+  id-token: write
 
 jobs:
   release:
@@ -42,6 +44,18 @@ jobs:
       - name: Create manual-install archive
         run: zip -j "obsidian-worktable-${{ steps.validate.outputs.version }}.zip" main.js manifest.json styles.css
 
+      # Attest only the three files Obsidian recognizes. The manual-install
+      # zip is a convenience bundle for non-BRAT users and is excluded so
+      # the attestation subject list stays scoped to the artifacts Obsidian
+      # actually reads from the release.
+      - name: Attest build provenance
+        uses: actions/attest@v1
+        with:
+          subject-path: |
+            main.js
+            manifest.json
+            styles.css
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -49,6 +63,10 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-') }}
           generate_release_notes: true
           fail_on_unmatched_files: true
+          # Obsidian only reads main.js / manifest.json / styles.css from a
+          # release. The zip is a manual-install bundle (download + extract
+          # into .obsidian/plugins/worktable/); BRAT reads manifest.json
+          # directly from the repo, not from this asset.
           files: |
             main.js
             manifest.json

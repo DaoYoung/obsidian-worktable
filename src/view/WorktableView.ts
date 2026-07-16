@@ -120,8 +120,6 @@ export class WorktableView extends ItemView {
       const message = err instanceof Error ? err.message : String(err);
       inquirySection?.errorEl.setText(`⚠ Widget failed: ${message}`);
       inquirySection?.errorEl.show();
-      // eslint-disable-next-line no-console
-      console.error(`[worktable] widget ${descriptor.id} failed`, err);
     }
   }
 
@@ -143,8 +141,6 @@ export class WorktableView extends ItemView {
       const message = err instanceof Error ? err.message : String(err);
       recallSection?.errorEl.setText(`⚠ Widget failed: ${message}`);
       recallSection?.errorEl.show();
-      // eslint-disable-next-line no-console
-      console.error(`[worktable] widget ${descriptor.id} failed`, err);
     }
   }
 
@@ -202,8 +198,6 @@ export class WorktableView extends ItemView {
       const message = err instanceof Error ? err.message : String(err);
       section.errorEl.setText(`⚠ Widget failed: ${message}`);
       section.errorEl.show();
-      // eslint-disable-next-line no-console
-      console.error(`[worktable] widget ${descriptor.id} failed`, err);
     }
   }
 

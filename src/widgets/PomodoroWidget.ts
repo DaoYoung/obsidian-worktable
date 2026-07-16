@@ -1,5 +1,6 @@
 import type { WidgetContext } from "../types";
 import type { PomDb } from "../storage/pomodoroDb";
+import { clearChildren, el } from "../utils/dom";
 
 const STORAGE_KEY = "pomo-state-v1";
 /** Fetch & render the most recent 20 records; CSS shows ~6 by default with overflow scrolling. */
@@ -108,12 +109,6 @@ function fmt(sec: number): string {
 function formatHours(sec: number): string {
   const hours = (sec || 0) / 3600;
   return `${hours.toFixed(1)}小时`;
-}
-
-function escapeHtml(s: string): string {
-  return String(s).replace(/[<>"'&]/g, (c) =>
-    ({ "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;", "&": "&amp;" }[c] ?? c)
-  );
 }
 
 export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetContext, pomDb?: PomDb): void {
@@ -266,16 +261,28 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
   optsDiv.className = "pomo-options";
   left.appendChild(optsDiv);
 
-  const optSound = document.createElement("label");
-  optSound.innerHTML = `<input type="checkbox" id="pomo-opt-sound" /> 🔔 声音`;
+  const optSound = el("label", {
+    children: [
+      el("input", { attrs: { type: "checkbox", id: "pomo-opt-sound" } }),
+      " 🔔 声音",
+    ],
+  });
   optsDiv.appendChild(optSound);
 
-  const optNotify = document.createElement("label");
-  optNotify.innerHTML = `<input type="checkbox" id="pomo-opt-notify" /> 📢 通知`;
+  const optNotify = el("label", {
+    children: [
+      el("input", { attrs: { type: "checkbox", id: "pomo-opt-notify" } }),
+      " 📢 通知",
+    ],
+  });
   optsDiv.appendChild(optNotify);
 
-  const optAuto = document.createElement("label");
-  optAuto.innerHTML = `<input type="checkbox" id="pomo-opt-auto" /> 🔄 自动`;
+  const optAuto = el("label", {
+    children: [
+      el("input", { attrs: { type: "checkbox", id: "pomo-opt-auto" } }),
+      " 🔄 自动",
+    ],
+  });
   optsDiv.appendChild(optAuto);
 
   // Stats
@@ -299,9 +306,13 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
     const rowEl = document.createElement("div");
     rowEl.className = "pomo-stats-row" + (idx === 1 ? " avg" : "");
     for (const stat of rowStats) {
-      const statEl = document.createElement("div");
-      statEl.className = "pomo-stat";
-      statEl.innerHTML = `<div class="pomo-stat-v" id="${stat.id}">0</div><div class="pomo-stat-l">${stat.label}</div>`;
+      const statEl = el("div", {
+        className: "pomo-stat",
+        children: [
+          el("div", { className: "pomo-stat-v", attrs: { id: stat.id }, text: "0" }),
+          el("div", { className: "pomo-stat-l", text: stat.label }),
+        ],
+      });
       rowEl.appendChild(statEl);
     }
     statsDiv.appendChild(rowEl);
@@ -312,8 +323,16 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
   histDiv.className = "pomo-history";
   right.appendChild(histDiv);
 
-  const histHead = document.createElement("h4");
-  histHead.innerHTML = `<span>📝 最近记录</span><button class="pomo-link-btn" id="pomo-btn-export">导出 CSV</button>`;
+  const histHead = el("h4", {
+    children: [
+      el("span", { text: "📝 最近记录" }),
+      el("button", {
+        className: "pomo-link-btn",
+        attrs: { id: "pomo-btn-export", type: "button" },
+        text: "导出 CSV",
+      }),
+    ],
+  });
   histDiv.appendChild(histHead);
 
   const listEl = document.createElement("ul");
@@ -565,26 +584,38 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
   }
 
   async function refreshHistory(): Promise<void> {
+    const list = $("pomo-list")!;
+    clearChildren(list);
+
     if (!db || !dbReady) {
-      ($("pomo-list")!).innerHTML =
-        '<li style="color:var(--text-faint);">⚠ DB 不可用</li>';
+      list.appendChild(el("li", { className: "pomo-empty", text: "⚠ DB 不可用" }));
       return;
     }
     try {
       const [recs, st] = await Promise.all([db.recent(RECENT_HISTORY_LIMIT), db.stats()]);
-      const list = $("pomo-list")!;
       if (recs.length === 0) {
-        list.innerHTML =
-          '<li style="color:var(--text-faint);">暂无记录 · 完成首次番茄后会自动出现 ⬇</li>';
+        list.appendChild(
+          el("li", { className: "pomo-empty", text: "暂无记录 · 完成首次番茄后会自动出现 ⬇" })
+        );
       } else {
-        list.innerHTML = recs
-          .map((r) => {
-            const t = new Date(r.completedAt);
-            const ts = `${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")} ${String(t.getHours()).padStart(2, "0")}:${String(t.getMinutes()).padStart(2, "0")}`;
-            const cn = ({ work: "🍅专注", short: "☕短休", long: "🌿长休", custom: "⚙自定义" } as const)[r.type as keyof typeof MODE_LABELS] || r.type;
-            return `<li><span><span class="pomo-pill ${escapeHtml(r.type)}">${escapeHtml(cn)}</span>${Math.round((r.duration || 0) / 60)}min</span><span>${escapeHtml(ts)}</span></li>`;
-          })
-          .join("");
+        recs.forEach((r) => {
+          const t = new Date(r.completedAt);
+          const ts = `${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")} ${String(t.getHours()).padStart(2, "0")}:${String(t.getMinutes()).padStart(2, "0")}`;
+          const cn = MODE_LABELS[r.type as PomState["mode"]] ?? r.type;
+          list.appendChild(
+            el("li", {
+              children: [
+                el("span", {
+                  children: [
+                    el("span", { className: `pomo-pill ${r.type}`, text: cn }),
+                    `${Math.round((r.duration || 0) / 60)}min`,
+                  ],
+                }),
+                el("span", { text: ts }),
+              ],
+            })
+          );
+        });
       }
       ($("pomo-stat-today")!).textContent = String(st.todayCount);
       ($("pomo-stat-today-focus")!).textContent = formatHours(st.todayFocusSec);
@@ -594,7 +625,13 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
       ($("pomo-stat-avg-focus")!).textContent = formatHours(st.focusTotalSec / days);
       ($("pomo-stat-avg-break")!).textContent = formatHours(st.breakTotalSec / days);
     } catch (e) {
-      ($("pomo-list")!).innerHTML = `<li style="color:var(--text-faint);">⚠ 读取失败: ${escapeHtml(String(e))}</li>`;
+      clearChildren(list);
+      list.appendChild(
+        el("li", {
+          className: "pomo-empty",
+          text: `⚠ 读取失败: ${e instanceof Error ? e.message : String(e)}`,
+        })
+      );
     }
   }
 

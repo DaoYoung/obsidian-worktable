@@ -179,7 +179,7 @@ describe("settings - setup wizard strings", () => {
     expect(s.serviceSetupHeading).toBe("Setup local service");
     expect(s.serviceSetupIntro).toMatch(/article fetching|Direct AI/i);
     expect(s.serviceSetupTestButton).toBe("Test connection");
-    expect(s.serviceSetupCopied).toBe("Copied!");
+    expect(s.serviceSetupCopyHint).toBe("Click to view · then Cmd/Ctrl+C to copy");
   });
 
   it("English wizard bundles Linux/Windows into a single fallback line", () => {
@@ -210,7 +210,7 @@ describe("settings - setup wizard strings", () => {
     const s = getSettingsStrings("zh");
     expect(s.serviceSetupHeading).toBe("本地服务一键安装");
     expect(s.serviceSetupTestButton).toBe("测试连接");
-    expect(s.serviceSetupCopied).toBe("已复制!");
+    expect(s.serviceSetupCopyHint).toBe("点击查看 · 然后按 Cmd/Ctrl+C 复制");
     expect(s.serviceSetupMacosInstallCmd).toBe("bash ~/obsidian-worktable/server/install-macos.sh");
   });
 
