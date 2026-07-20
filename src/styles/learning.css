@@ -971,6 +971,15 @@
   color: var(--text-muted, #666);
 }
 
+/* Allow text selection inside the active-recall widget so users can copy
+ * questions and explanations. Scoped to `.home-recall` so other widgets
+ * keep their existing selection behavior. */
+.worktable .home-recall,
+.worktable .home-recall * {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
 /* Status banner at the very bottom of the learning module. Hidden by
  * default via class toggle (not the `hidden` attribute, which CSS
  * `display: flex` would otherwise override). The base rule omits
