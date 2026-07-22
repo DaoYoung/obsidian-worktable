@@ -176,7 +176,7 @@ export function mountInquiryLearningWidget(containerEl: HTMLElement, context: Wi
   const showArchivedNotice = (count: number): void => {
     archivedNotice.hidden = false;
     archivedNotice.empty();
-    archivedNotice.createSpan({ text: `ℹ️ 本文已归档（${count} 道题），可继续使用 AI 出题等学习功能` });
+    archivedNotice.createSpan({ text: `ℹ️ 本文已归档过（${count} 次），再次归档会保留独立记录` });
   };
 
   const hideArchivedNotice = (): void => {
@@ -264,7 +264,7 @@ export function mountInquiryLearningWidget(containerEl: HTMLElement, context: Wi
       setInputSectionLoaded(true);
       hideArchivedNotice();
       try {
-        const archivedCount = await db.countLearningRecordsByUrl(url);
+        const archivedCount = await db.countLearningRecordsByTopic(url);
         if (disposed) return;
         if (archivedCount > 0) showArchivedNotice(archivedCount);
       } catch (_) {
@@ -483,26 +483,29 @@ export function mountInquiryLearningWidget(containerEl: HTMLElement, context: Wi
       setStatus("请先提交答案", "err");
       return;
     }
+    const correctCount = state.lastCorrect.reduce(
+      (sum, value) => sum + (value === true ? 1 : 0),
+      0,
+    );
+    const topic = deriveArchiveTopic(state.url, state.title, state.article);
     archiveTopButton.setText("归档中…");
     try {
-      for (const { question, index } of answered) {
-        const record: LearningRecord = {
-          title: state.title,
-          url: state.url,
-          question: question.text,
-          questionType: question.type,
-          correct: state.lastCorrect[index] === true,
-          userAnswer: state.lastAnswers[index] ?? "",
-          correctAnswer: question.answer,
-          createdAt: Date.now(),
-        };
-        await db.addLearningRecord(record);
-        if (disposed) return;
-        dashboardEl.dispatchEvent(new CustomEvent("home-learning-archived", { bubbles: true, detail: record }));
-      }
-      archiveTopButton.setText(`✓ 已归档 ${answered.length} 题`);
-      setStatus(`已归档 ${answered.length} 题`, "ok");
-      showDone(`✅ 已归档 ${answered.length} 道题（无论对错都会保存）`);
+      const record: LearningRecord = {
+        title: state.title,
+        url: state.url,
+        topic,
+        totalCount: answered.length,
+        correctCount,
+        createdAt: Date.now(),
+      };
+      await db.addLearningRecord(record);
+      if (disposed) return;
+      dashboardEl.dispatchEvent(
+        new CustomEvent("home-learning-archived", { bubbles: true, detail: record }),
+      );
+      archiveTopButton.setText("✓ 已归档本次学习");
+      setStatus(`已归档 · ${correctCount}/${answered.length}`, "ok");
+      showDone(`✅ 已归档本次学习（${correctCount}/${answered.length} 题）`);
     } catch (error) {
       archiveTopButton.setText("📦 归档本次学习");
       showError(error, "归档失败");
@@ -689,6 +692,19 @@ function emptyState(): InquiryState {
     keyPoints: [],
     selectedPoints: new Set<number>(),
   };
+}
+
+/**
+ * Pick the per-article primary key for archive lookup.
+ * URL 抓取的文章 → URL 作主键(同一 URL 多次归档可重复识别);
+ * 粘贴文本(无 URL) → 标题或正文前 30 字,保证可重复识别同一篇。
+ */
+function deriveArchiveTopic(url: string, title: string, article: string): string {
+  const trimmedUrl = (url || "").trim();
+  if (trimmedUrl && trimmedUrl !== "(粘贴)") return trimmedUrl;
+  const trimmedTitle = (title || "").trim();
+  if (trimmedTitle) return trimmedTitle;
+  return (article || "").trim().slice(0, 30);
 }
 
 function section(parent: HTMLElement, title: string): HTMLDivElement {

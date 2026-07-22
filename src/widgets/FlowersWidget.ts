@@ -1,5 +1,5 @@
 import type { WidgetContext } from "../types";
-import type { HomeDb } from "../storage/homeDb";
+import type { HomeDb, LearningRecord } from "../storage/homeDb";
 import { clearChildren, el } from "../utils/dom";
 
 const FLOWERS_KEY = "home-learning-flowers";
@@ -84,17 +84,7 @@ export function mountFlowersWidget(containerEl: HTMLElement, context: WidgetCont
     flowerIcon.classList.add("bloom");
   }
 
-  function renderArchives(records: Array<{
-    id?: number;
-    title?: string;
-    url?: string;
-    question?: string;
-    questionType?: string;
-    correct?: boolean;
-    userAnswer?: string;
-    correctAnswer?: string;
-    createdAt?: number;
-  }>): void {
+  function renderArchives(records: LearningRecord[]): void {
     clearChildren(archivesList);
 
     if (!records || records.length === 0) {
@@ -116,13 +106,14 @@ export function mountFlowersWidget(containerEl: HTMLElement, context: WidgetCont
     const recent = showAll ? records : records.slice(0, 1);
 
     recent.forEach((r, idx) => {
-      const ok = !!r.correct;
+      const correctCount = typeof r.correctCount === "number" ? r.correctCount : 0;
+      const totalCount = typeof r.totalCount === "number" ? r.totalCount : 0;
       const date = fmtTime(r.createdAt || 0);
-      const qPreview =
-        (r.question || "").slice(0, 50) + ((r.question || "").length > 50 ? "…" : "");
+      const topicLabel = (r.topic || r.title || r.url || "").trim();
+      const titleLabel = (r.title || "").trim() || topicLabel;
+      const detailUrl = r.url ? r.url : "";
       const realIdx = records.indexOf(r);
 
-      const detailUrl = r.url ? r.url : "";
       const archiveItem = el("div", {
         className: "archive-item",
         attrs: { "data-idx": String(realIdx) },
@@ -132,40 +123,40 @@ export function mountFlowersWidget(containerEl: HTMLElement, context: WidgetCont
             children: [
               el("span", {
                 className: "archive-title",
-                text: r.title || r.url || "",
-                attrs: { title: r.title || r.url || "" },
+                text: titleLabel,
+                attrs: { title: titleLabel },
               }),
               el("span", {
-                className: ok ? "archive-badge ok" : "archive-badge err",
-                text: ok ? "✓ 对" : "✗ 错",
+                className: "archive-badge ok",
+                text: `${correctCount}/${totalCount} 题`,
               }),
             ],
           }),
           el("div", {
             className: "archive-q",
-            children: ["Q: ", qPreview],
+            text: topicLabel && topicLabel !== titleLabel ? `主题: ${topicLabel}` : "",
           }),
           el("div", {
             className: "archive-foot",
             children: [
               el("span", { text: date }),
-              el("span", { text: r.questionType === "mc" ? "🔘 选择" : "✏️ 问答" }),
+              el("span", { text: "📦 文章归档" }),
             ],
           }),
           el("div", {
             className: "archive-detail",
             children: [
-              el("b", { text: "题目:" }),
+              el("b", { text: "标题:" }),
               " ",
-              r.question || "",
+              titleLabel,
               el("br"),
-              el("b", { text: "你的答案:" }),
+              el("b", { text: "主题:" }),
               " ",
-              r.userAnswer || "(空)",
+              topicLabel || "(无)",
               el("br"),
-              el("b", { text: "参考答案:" }),
+              el("b", { text: "归档结果:" }),
               " ",
-              r.correctAnswer || "",
+              `答对 ${correctCount} / 共 ${totalCount} 题`,
               el("br"),
               el("b", { text: "来源:" }),
               " ",
@@ -174,7 +165,7 @@ export function mountFlowersWidget(containerEl: HTMLElement, context: WidgetCont
                     attrs: { href: detailUrl, target: "_blank", rel: "noopener" },
                     text: detailUrl,
                   })
-                : "",
+                : "(粘贴文本)",
             ],
           }),
         ],

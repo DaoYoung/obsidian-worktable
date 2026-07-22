@@ -11,13 +11,16 @@ export interface TodoRecord {
 
 export interface LearningRecord {
   id?: number;
+  /** 文章标题;粘贴文本时同时作为 topic 候选。 */
   title: string;
+  /** 原始 URL;空字符串表示粘贴文本。 */
   url: string;
-  question: string;
-  questionType: string;
-  correct: boolean;
-  userAnswer: string;
-  correctAnswer: string;
+  /** 归档展示用的主键。URL 非空时 = url;否则 = title 或正文前 30 字。 */
+  topic: string;
+  /** 本次已答题数。 */
+  totalCount: number;
+  /** 本次答对数。 */
+  correctCount: number;
   createdAt: number;
 }
 
@@ -35,7 +38,7 @@ export interface HomeDb {
   clearDoneTodos(): Promise<void>;
   getAllLearningRecords(): Promise<LearningRecord[]>;
   addLearningRecord(record: Omit<LearningRecord, "id">): Promise<number>;
-  countLearningRecordsByUrl(url: string): Promise<number>;
+  countLearningRecordsByTopic(topic: string): Promise<number>;
   clearLearningRecords(): Promise<void>;
   getAllReadArticleIds(): Promise<string[]>;
   markArticleRead(path: string): Promise<void>;
@@ -157,16 +160,16 @@ export function createHomeDb(): HomeDb {
     });
   }
 
-  async function countLearningRecordsByUrl(url: string): Promise<number> {
-    if (!url) return 0;
+  async function countLearningRecordsByTopic(topic: string): Promise<number> {
+    if (!topic) return 0;
     const db = await open();
     return new Promise((resolve, reject) => {
       const tx = db.transaction("learningRecords", "readonly");
       const req = tx.objectStore("learningRecords").getAll();
       req.onsuccess = () => {
         const all = (req.result || []) as LearningRecord[];
-        const target = url.trim();
-        resolve(all.filter((r) => (r.url || "").trim() === target).length);
+        const target = topic.trim();
+        resolve(all.filter((r) => (r.topic || "").trim() === target).length);
       };
       req.onerror = () => reject(req.error);
     });
@@ -232,7 +235,7 @@ export function createHomeDb(): HomeDb {
     clearDoneTodos,
     getAllLearningRecords,
     addLearningRecord,
-    countLearningRecordsByUrl,
+    countLearningRecordsByTopic,
     clearLearningRecords,
     getAllReadArticleIds,
     markArticleRead,
