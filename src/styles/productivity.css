@@ -847,3 +847,29 @@
   border-radius: 8px;
   border: 1px dashed var(--background-modifier-border, #d8d8d8);
 }
+
+.worktable .pomo-stale-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  border-radius: 6px;
+  background: rgba(243, 156, 18, 0.12);
+  border: 1px solid rgba(243, 156, 18, 0.45);
+  color: var(--text-normal);
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+.worktable .pomo-stale-banner[hidden] { display: none; }
+.worktable .pomo-stale-text { flex: 1 1 220px; }
+.worktable .pomo-stale-remember {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+.worktable .pomo-stale-remember input { margin: 0; }

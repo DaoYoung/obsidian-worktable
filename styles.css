@@ -1,6 +1,6 @@
 /* ===========================================================================
    Obsidian Worktable — Built Styles
-   Generated: 2026-07-20T03-39-02
+   Generated: 2026-07-22T02-22-24
    Sources:
  *  - src/styles/base.css
  *  - src/styles/productivity.css
@@ -1283,6 +1283,32 @@
   border: 1px dashed var(--background-modifier-border, #d8d8d8);
 }
 
+.worktable .pomo-stale-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  border-radius: 6px;
+  background: rgba(243, 156, 18, 0.12);
+  border: 1px solid rgba(243, 156, 18, 0.45);
+  color: var(--text-normal);
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+.worktable .pomo-stale-banner[hidden] { display: none; }
+.worktable .pomo-stale-text { flex: 1 1 220px; }
+.worktable .pomo-stale-remember {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+.worktable .pomo-stale-remember input { margin: 0; }
+
 
 /* ============================================================
    Obsidian Worktable — Learning & Review Widgets
@@ -1854,12 +1880,43 @@
 
 /* ── Concept preview (two-stage write) ───────────────────── */
 
+.worktable .learn-concept-row,
+.worktable .kp-preview {
+  max-height: 480px;
+  overflow: hidden;
+  opacity: 1;
+  transition: max-height 0.3s ease, opacity 0.2s ease, margin 0.3s ease, padding 0.3s ease, border-width 0.3s ease;
+}
+
 .worktable .kp-preview {
   background: var(--background-primary, #fff);
   border: 1px solid var(--background-modifier-border, #d8d8d8);
   border-radius: 8px;
   padding: 12px;
   margin-top: 10px;
+}
+
+.worktable .learn-concept-row.is-collapsing,
+.worktable .kp-preview.is-collapsing {
+  max-height: 0;
+  opacity: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.worktable .kp-preview.is-collapsing {
+  padding-top: 0;
+  padding-bottom: 0;
+  border-width: 0;
+}
+
+.worktable .kp-preview[hidden] { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .worktable .learn-concept-row,
+  .worktable .kp-preview {
+    transition: none;
+  }
 }
 
 .worktable .kp-preview-h {

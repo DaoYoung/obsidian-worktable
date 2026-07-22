@@ -17,6 +17,14 @@ interface PomState {
   todayDone: { date: string; count: number };
   config: { sound: boolean; notify: boolean; auto: boolean };
   _currentStart: number | null;
+  /** Date string of the last day we surfaced the stale-timer prompt. */
+  stalePromptDate: string;
+  /**
+   * Persisted user preference for what to do when a paused timer from a
+   * previous day is detected on mount. `null` means "ask every time";
+   * `"reset"` / `"keep"` were chosen via the "以后都这样处理" checkbox.
+   */
+  staleTimerPref: "reset" | "keep" | null;
 }
 
 const MODE_LABELS: Record<PomState["mode"], string> = {
@@ -43,6 +51,8 @@ function defaultState(): PomState {
     todayDone: { date: new Date().toDateString(), count: 0 },
     config: { sound: true, notify: true, auto: true },
     _currentStart: null,
+    stalePromptDate: "",
+    staleTimerPref: null,
   };
 }
 
@@ -95,9 +105,31 @@ function saveState(state: PomState): void {
         running: state.running,
         cycleIdx: state.cycleIdx,
         todayDone: state.todayDone,
+        stalePromptDate: state.stalePromptDate,
+        staleTimerPref: state.staleTimerPref,
       }),
     );
   } catch (_) {}
+}
+
+/**
+ * Decide whether to surface the stale-timer prompt on mount. Pure function
+ * — exported for unit testing. Returns true iff:
+ * - there's a leftover `pausedRemain` from a previous day, AND
+ * - we haven't already prompted today, AND
+ * - the user hasn't picked "always reset" / "always keep" via the
+ *   "以后都这样处理" checkbox yet.
+ *
+ * The preference application is intentionally NOT here: callers do their own
+ * "if pref=reset, clear pausedRemain" pass before rendering so the user
+ * doesn't briefly see yesterday's timer.
+ */
+export function shouldShowStalePrompt(state: PomState, today: string): boolean {
+  if (state.pausedRemain == null) return false;
+  if (state.stalePromptDate === today) return false;
+  if (state.staleTimerPref === "reset") return false;
+  if (state.staleTimerPref === "keep") return false;
+  return true;
 }
 
 function fmt(sec: number): string {
@@ -124,6 +156,36 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
   wrap.className = "worktable pomo-widget-instance";
   wrap.setAttribute("data-mode", state.mode);
   containerEl.appendChild(wrap);
+
+  // Stale-timer banner — shown when a `pausedRemain` from a previous day is
+  // detected on mount. The banner lives at the top of the widget and is
+  // hidden by default; the init async block may surface it after DB
+  // initialization. See shouldShowStalePrompt for the trigger rule.
+  const staleBanner = document.createElement("div");
+  staleBanner.className = "pomo-stale-banner";
+  staleBanner.setAttribute("hidden", "");
+  const staleText = document.createElement("span");
+  staleText.className = "pomo-stale-text";
+  staleBanner.appendChild(staleText);
+  const staleRemember = document.createElement("label");
+  staleRemember.className = "pomo-stale-remember";
+  const staleRememberInput = document.createElement("input");
+  staleRememberInput.type = "checkbox";
+  staleRememberInput.id = "pomo-stale-remember";
+  staleRemember.appendChild(staleRememberInput);
+  staleRemember.appendChild(document.createTextNode(" 以后都这样处理"));
+  staleBanner.appendChild(staleRemember);
+  const staleResetBtn = document.createElement("button");
+  staleResetBtn.className = "pomo-ctrl ghost";
+  staleResetBtn.type = "button";
+  staleResetBtn.textContent = "↺ 重置";
+  staleBanner.appendChild(staleResetBtn);
+  const staleKeepBtn = document.createElement("button");
+  staleKeepBtn.className = "pomo-ctrl primary";
+  staleKeepBtn.type = "button";
+  staleKeepBtn.textContent = "▶ 继续";
+  staleBanner.appendChild(staleKeepBtn);
+  wrap.appendChild(staleBanner);
 
   // ── Layout ────────────────────────────────────────────────────────────────
   const row = document.createElement("div");
@@ -743,6 +805,30 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
     void exportData();
   });
 
+  // Stale-timer banner buttons. These are simple state mutations: we don't
+  // need the widget-level event machinery since the banner lives only as
+  // long as this widget instance. The handlers read the remember-checkbox
+  // state at click time, then collapse the banner and re-render.
+  staleResetBtn.addEventListener("click", () => {
+    const remember = staleRememberInput.checked;
+    state.pausedRemain = null;
+    state.endsAt = null;
+    state.running = false;
+    state._currentStart = null;
+    if (remember) state.staleTimerPref = "reset";
+    state.stalePromptDate = new Date().toDateString();
+    saveState(state);
+    staleBanner.setAttribute("hidden", "");
+    render();
+  });
+  staleKeepBtn.addEventListener("click", () => {
+    const remember = staleRememberInput.checked;
+    if (remember) state.staleTimerPref = "keep";
+    state.stalePromptDate = new Date().toDateString();
+    saveState(state);
+    staleBanner.setAttribute("hidden", "");
+  });
+
   // ── Init ──────────────────────────────────────────────────────────────────
   render();
 
@@ -779,6 +865,28 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
       try {
         await Notification.requestPermission();
       } catch (_) {}
+    }
+
+    // Stale-timer prompt — surface after DB / notification init so the
+    // banner doesn't fight with the initial render() pass for visibility.
+    // Two paths:
+    //   1. No preference set → ask via the banner.
+    //   2. Preference is "always reset" → silently drop yesterday's
+    //      pausedRemain so the widget opens clean. We deliberately do
+    //      this AFTER the first render() so a stale `pausedRemain` never
+    //      flashes in the ring before being cleared.
+    const todayKey = new Date().toDateString();
+    if (state.staleTimerPref === "reset" && state.pausedRemain != null) {
+      state.pausedRemain = null;
+      state.endsAt = null;
+      state.running = false;
+      state._currentStart = null;
+      saveState(state);
+      render();
+    } else if (shouldShowStalePrompt(state, todayKey)) {
+      const sec = state.pausedRemain ?? 0;
+      staleText.textContent = `检测到昨天还剩 ${fmt(sec)} 的计时器,要重置还是继续?`;
+      staleBanner.removeAttribute("hidden");
     }
   })();
 
