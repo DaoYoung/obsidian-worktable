@@ -36,6 +36,13 @@ export interface CloakfetchExpandResponse {
   error?: string;
 }
 
+export interface CloakfetchAskResponse {
+  ok: boolean;
+  /** Free-form Markdown answer from the AI, grounded in the article context. */
+  answer?: string;
+  error?: string;
+}
+
 export interface ExpandedKnowledge {
   subject: string;
   translation: string;
@@ -259,6 +266,30 @@ export class CloakfetchClient {
       pos: res.pos ?? "",
       markdown: res.markdown ?? "",
     };
+  }
+
+  async askQuestion(title: string, text: string, question: string, timeoutMs?: number): Promise<string> {
+    const trimmed = (question || "").trim();
+    if (!trimmed) throw new CloakfetchError("question must be non-empty", {
+      status: 0,
+      body: "",
+      endpoint: "/ai/ask",
+    });
+    const direct = this.directAi;
+    if (direct) return direct.answerQuestion(title, text, trimmed);
+    const res = await this.requestJson<CloakfetchAskResponse>("/ai/ask", {
+      method: "POST",
+      body: { title, text, question: trimmed },
+      timeoutMs,
+    });
+    if (!res.ok) {
+      throw new CloakfetchError(res.error || "AI ask failed", {
+        status: 0,
+        body: JSON.stringify(res),
+        endpoint: "/ai/ask",
+      });
+    }
+    return res.answer ?? "";
   }
 
   async diagnose(url?: string): Promise<Record<string, unknown> | string> {

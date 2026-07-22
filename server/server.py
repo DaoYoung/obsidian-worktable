@@ -10,6 +10,7 @@ Endpoints:
   POST /ai/questions                 → JSON {title, text, count<=3} → AI quiz (mc/cloze/tf/short)
   POST /ai/extract                   → JSON {title, text, maxPoints<=10} → key points list
   POST /ai/expand                    → JSON {name, context?} → {subject, translation, pos, markdown}
+  POST /ai/ask                       → JSON {title, text, question} → free-form Markdown answer
   GET  /ai/health                    → JSON {ok, baseUrl, model}  (no token)
 
 Run:
@@ -526,6 +527,32 @@ def _generate_questions(title: str, text: str, count: int) -> list:
     raw = _call_anthropic(system, user, max_tokens=2048, timeout=60)
     questions = _parse_questions_json(raw)
     return _sanitize_questions(questions, count)
+
+
+def _answer_question(title: str, text: str, question: str) -> str:
+    """Ask the AI to answer a free-form question grounded in the article.
+
+    Returns the raw Markdown answer; the caller renders it as-is.
+    """
+    trimmed_question = (question or "").strip()
+    if not trimmed_question:
+        raise ValueError("question must be non-empty")
+    snippet = text.strip() if text else ""
+    if len(snippet) > 6000:
+        snippet = snippet[:6000] + "…(已截断)"
+    system = (
+        "你是一个学习助手。基于用户提供的文章内容回答用户的问题。"
+        "如果问题与文章无关,直接说明文章中未涉及;"
+        "如果文章里有相关信息,引用并解释,不要编造。"
+        "回答用简洁中文,可使用 Markdown,但不要用代码块包裹整段答案。"
+    )
+    user = (
+        f"文章标题:{title or '(无)'}\n\n"
+        f"文章正文:\n{snippet or '(无正文)'}\n\n"
+        f"用户问题:{trimmed_question}\n\n"
+        f"请基于文章内容回答上面的问题:"
+    )
+    return _call_anthropic(system, user, max_tokens=1024, timeout=60)
 
 
 def _extract_keypoints(title: str, text: str, max_points: int = 8) -> list:
@@ -1088,6 +1115,7 @@ class Handler(BaseHTTPRequestHandler):
                 "<li>POST <code>/ai/questions</code> — generate quiz from text</li>"
                 "<li>POST <code>/ai/extract</code> — extract key points</li>"
                 "<li>POST <code>/ai/expand</code> — expand a knowledge point</li>"
+                "<li>POST <code>/ai/ask</code> — answer a free-form question against the article</li>"
                 "<li>GET <code>/ai/health</code> — AI config (no token)</li>"
                 "</ul></body>"
             )
@@ -1184,6 +1212,32 @@ class Handler(BaseHTTPRequestHandler):
                 })
             except Exception as e:
                 LOG.exception("AI expand failed")
+                return self._send_json(502, {"ok": False, "error": str(e)})
+
+        # /ai/ask — free-form Q&A grounded in the article
+        if path == "/ai/ask":
+            if not self._require_auth():
+                return
+            try:
+                body = self._read_body()
+            except Exception as e:
+                return self._send_json(400, {"ok": False, "error": f"bad request: {e}"})
+            title = str(body.get("title", "")).strip()
+            text = str(body.get("text", "")).strip()
+            question = str(body.get("question", "")).strip()
+            if not question:
+                return self._send_json(400, {"ok": False, "error": "missing 'question'"})
+            try:
+                t0 = time.time()
+                answer = _answer_question(title, text, question)
+                elapsed = int((time.time() - t0) * 1000)
+                return self._send_json(200, {
+                    "ok": True,
+                    "answer": answer,
+                    "elapsedMs": elapsed,
+                })
+            except Exception as e:
+                LOG.exception("AI ask failed")
                 return self._send_json(502, {"ok": False, "error": str(e)})
 
         self._send_json(404, {"ok": False, "error": "not found"})

@@ -4,6 +4,7 @@ import { createHomeDb, type LearningRecord } from "../storage/homeDb";
 import { type WorktableSettings } from "../settings";
 import type { WidgetContext } from "../types";
 import { parsePastedArticle } from "./parsePastedArticle";
+import { MarkdownRenderer } from "obsidian";
 
 type QuestionType = "mc" | "cloze" | "tf" | "short";
 
@@ -119,6 +120,20 @@ export function mountInquiryLearningWidget(containerEl: HTMLElement, context: Wi
   submitAllButton.hidden = true;
   const archiveSummary = rightScroll.createSpan({ cls: "learn-archive-summary" });
 
+  // ④ 自由问答：放在 AI 出题板块下方新一行,初次隐藏,文章加载后与 learnSplit 同步显示
+  const freeAskSection = root.createDiv({ cls: "learn-faq" });
+  freeAskSection.hidden = true;
+  freeAskSection.createDiv({ cls: "learn-section-h", text: "④ 自由问答" });
+  const freeAskHint = freeAskSection.createDiv({ cls: "learn-faq-hint", text: "输入关于本文的任何问题，AI 会基于文章内容回答。" });
+  const freeAskTextarea = freeAskSection.createEl("textarea", {
+    cls: "learn-faq-input",
+    attr: { placeholder: "例如：本文的核心论点是什么？", rows: "3" },
+  });
+  const freeAskRow = freeAskSection.createDiv({ cls: "learn-row" });
+  const freeAskButton = button(freeAskRow, "💬 AI 回答", "secondary");
+  const freeAskClearButton = button(freeAskRow, "清空", "secondary compact");
+  const freeAskAnswerBox = freeAskSection.createDiv({ cls: "learn-faq-answer", attr: { "aria-live": "polite" } });
+
   // Status banner at the very bottom of the inquiry module.
   const loadingBanner = root.createDiv({ cls: "home-learn-loading", attr: { "aria-hidden": "true" } });
 
@@ -210,6 +225,14 @@ export function mountInquiryLearningWidget(containerEl: HTMLElement, context: Wi
   listen(submitAllButton, "click", () => {
     submitAllAnswers();
   });
+  listen(freeAskButton, "click", () => {
+    void runFreeAsk();
+  });
+  listen(freeAskClearButton, "click", () => {
+    freeAskTextarea.value = "";
+    freeAskAnswerBox.empty();
+    freeAskTextarea.focus();
+  });
   listen(newRoundButton, "click", resetRound);
 
   component.register(() => {
@@ -234,6 +257,7 @@ export function mountInquiryLearningWidget(containerEl: HTMLElement, context: Wi
       pasteTextarea.value = article.text;
       pasteDetails.open = true;
       learnSplit.hidden = false;
+      freeAskSection.hidden = false;
       questionList.empty();
       state.lastAnswers = [];
       state.lastCorrect = [];
@@ -275,6 +299,7 @@ export function mountInquiryLearningWidget(containerEl: HTMLElement, context: Wi
       pasteClearButton.hidden = true;
       pasteSummary.setText("正文");
       learnSplit.hidden = false;
+      freeAskSection.hidden = false;
       questionList.empty();
       setStatus(`已就绪 · ${text.length} 字`, "ok");
     } catch (error) {
@@ -491,6 +516,11 @@ export function mountInquiryLearningWidget(containerEl: HTMLElement, context: Wi
     pasteTextarea.value = "";
     pasteDetails.open = false;
     learnSplit.hidden = true;
+    freeAskSection.hidden = true;
+    freeAskTextarea.value = "";
+    freeAskAnswerBox.empty();
+    freeAskButton.disabled = false;
+    freeAskButton.setText("💬 AI 回答");
     questionList.empty();
     submitAllButton.hidden = true;
     submitAllButton.disabled = true;
@@ -503,6 +533,51 @@ export function mountInquiryLearningWidget(containerEl: HTMLElement, context: Wi
     hideLoading();
     setInputSectionLoaded(false);
     setStatus("空闲");
+  }
+
+  async function runFreeAsk(): Promise<void> {
+    if (!state.article) {
+      setStatus("请先抓取文章", "err");
+      return;
+    }
+    const question = freeAskTextarea.value.trim();
+    if (!question) {
+      setStatus("请先输入问题", "err");
+      freeAskTextarea.focus();
+      return;
+    }
+    freeAskButton.disabled = true;
+    freeAskButton.setText("回答中…");
+    setStatus("AI 回答中…");
+    showLoading("💬 AI 正在基于文章回答你的问题，请稍候…");
+    freeAskAnswerBox.empty();
+    freeAskAnswerBox.createDiv({ cls: "learn-faq-answer-pending", text: "正在生成回答…" });
+    try {
+      const answer = await client.askQuestion(state.title, state.article, question);
+      if (disposed) return;
+      freeAskAnswerBox.empty();
+      if (!answer.trim()) {
+        freeAskAnswerBox.createDiv({ cls: "learn-faq-answer-empty", text: "AI 没有返回内容，请换个问题试试。" });
+        setStatus("AI 未返回回答", "err");
+        showDone("❌ AI 没有返回回答", "err");
+        return;
+      }
+      const body = freeAskAnswerBox.createDiv({ cls: "learn-faq-answer-body" });
+      await MarkdownRenderer.render(app, answer, body, "", component);
+      setStatus("已生成回答", "ok");
+      showDone("✅ 已基于文章回答问题");
+    } catch (error) {
+      freeAskAnswerBox.empty();
+      freeAskAnswerBox.createDiv({
+        cls: "learn-faq-answer-empty",
+        text: `回答失败：${errorMessage(error)}`,
+      });
+      showError(error, "AI 回答失败");
+      showDone(`❌ 回答失败：${errorMessage(error)}`, "err");
+    } finally {
+      freeAskButton.disabled = false;
+      freeAskButton.setText("💬 AI 回答");
+    }
   }
 
   async function extractKeyPoints(): Promise<void> {

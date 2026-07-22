@@ -49,6 +49,26 @@ export function keyPointsExtractionPrompt(title: string, text: string, maxPoints
   return { system, user };
 }
 
+export function freeAnswerPrompt(title: string, text: string, question: string): { system: string; user: string } {
+  const trimmedQuestion = (question || "").trim();
+  if (!trimmedQuestion) {
+    throw new Error("question must be non-empty");
+  }
+  let snippet = text.trim();
+  if (snippet.length > 6000) snippet = snippet.slice(0, 6000) + "…(已截断)";
+  const system =
+    "你是一个学习助手。基于用户提供的文章内容回答用户的问题。" +
+    "如果问题与文章无关,直接说明文章中未涉及;" +
+    "如果文章里有相关信息,引用并解释,不要编造。" +
+    "回答用简洁中文,可使用 Markdown,但不要用代码块包裹整段答案。";
+  const user =
+    `文章标题:${title || "(无)"}\n\n` +
+    `文章正文:\n${snippet || "(无正文)"}\n\n` +
+    `用户问题:${trimmedQuestion}\n\n` +
+    `请基于文章内容回答上面的问题:`;
+  return { system, user };
+}
+
 export function knowledgeExpandPrompt(name: string, context: string): { system: string; user: string } {
   const snippet = context.trim().slice(0, 4000);
   // Foreign-vocabulary detection: short input with no Chinese but Latin letters

@@ -1,6 +1,6 @@
 /* ===========================================================================
    Obsidian Worktable — Built Styles
-   Generated: 2026-07-22T02-22-24
+   Generated: 2026-07-22T09-34-13
    Sources:
  *  - src/styles/base.css
  *  - src/styles/productivity.css
@@ -2469,6 +2469,82 @@
   font-size: 11px;
   color: var(--text-muted, #666);
   font-weight: 500;
+}
+
+.worktable .learn-faq {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--background-modifier-border, #e0e0e0);
+  border-radius: 8px;
+  background: var(--background-secondary, #fafafa);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.worktable .learn-faq[hidden] { display: none; }
+
+.worktable .learn-faq-hint {
+  font-size: 12px;
+  color: var(--text-muted, #666);
+  line-height: 1.6;
+}
+
+.worktable .learn-faq-input {
+  width: 100%;
+  min-height: 72px;
+  padding: 8px 10px;
+  border: 1px solid var(--background-modifier-border, #d0d0d0);
+  border-radius: 6px;
+  background: var(--background-primary, #fff);
+  color: var(--text-normal, #222);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.worktable .learn-faq-input:focus {
+  outline: none;
+  border-color: var(--interactive-accent, #5b8def);
+  box-shadow: 0 0 0 2px rgba(91, 141, 239, 0.15);
+}
+
+.worktable .learn-faq-answer {
+  min-height: 0;
+  padding: 10px 12px;
+  background: var(--background-primary, #fff);
+  border: 1px solid var(--background-modifier-border, #e6e6e6);
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-normal, #222);
+}
+
+.worktable .learn-faq-answer:empty { display: none; }
+
+.worktable .learn-faq-answer-pending,
+.worktable .learn-faq-answer-empty {
+  color: var(--text-muted, #666);
+  font-style: italic;
+}
+
+.worktable .learn-faq-answer-empty {
+  color: var(--text-error, #d14);
+  font-style: normal;
+}
+
+.worktable .learn-faq-answer-body > :first-child { margin-top: 0; }
+.worktable .learn-faq-answer-body > :last-child { margin-bottom: 0; }
+.worktable .learn-faq-answer-body p { margin: 6px 0; }
+.worktable .learn-faq-answer-body ul,
+.worktable .learn-faq-answer-body ol { margin: 6px 0; padding-left: 22px; }
+.worktable .learn-faq-answer-body code {
+  background: var(--background-modifier-border, #eee);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 12px;
 }
 
 .worktable .learn-archive-summary {

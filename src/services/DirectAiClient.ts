@@ -6,6 +6,7 @@ import {
 import { AiClient } from "./ai/client";
 import type { AiProviderId } from "./ai/types";
 import {
+  freeAnswerPrompt,
   knowledgeExpandPrompt,
   keyPointsExtractionPrompt,
   questionGenerationPrompt,
@@ -60,6 +61,11 @@ export class DirectAiClient {
     const { system, user } = keyPointsExtractionPrompt(title, text, maxPoints);
     const raw = await this.client.call(system, user, 1024);
     return parseKeyPointsResponse(raw, maxPoints);
+  }
+
+  async answerQuestion(title: string, text: string, question: string): Promise<string> {
+    const { system, user } = freeAnswerPrompt(title, text, question);
+    return this.client.call(system, user, 1024);
   }
 
   async expandKnowledge(name: string, context = ""): Promise<ExpandedKnowledge> {
