@@ -226,9 +226,22 @@ function parseExpandedResponse(name: string, raw: string, isEnglishWord = false)
     const obj = JSON.parse(candidate);
     if (obj && typeof obj === "object") parsed = obj as Record<string, unknown>;
   } catch (_err) {
-    // Treat the raw text as the markdown body when JSON parsing fails.
-    const body = unescapeNewlines(raw.trim());
-    return { subject: "", translation: "", pos: "", markdown: body ? `# ${name}\n\n${body}` : "" };
+    // The model occasionally emits a malformed escape (e.g. an extra `\"`
+    // inside a points entry) which breaks JSON.parse for the whole payload.
+    // Fall back to per-field regex extraction so the user still gets a
+    // usable Markdown card; if even that yields nothing, render the raw
+    // response inside a fenced code block so it's visibly broken rather
+    // than mistakable for prose.
+    const extracted = extractExpandedFieldsLenient(candidate);
+    if (extracted) {
+      parsed = extracted;
+    } else {
+      const body = unescapeNewlines(raw.trim());
+      const wrapped = body
+        ? `# ${name}\n\n> AI 返回的格式无法解析，已按原文展示，请点击「重新生成」重试。\n\n\`\`\`\n${body}\n\`\`\``
+        : "";
+      return { subject: "", translation: "", pos: "", markdown: wrapped };
+    }
   }
 
   const subject = typeof parsed["subject"] === "string" ? unescapeNewlines(parsed["subject"] as string).trim() : "";
@@ -264,4 +277,132 @@ function parseExpandedResponse(name: string, raw: string, isEnglishWord = false)
     pos,
     markdown: markdown || `# ${name}\n\n${unescapeNewlines(raw.trim())}`,
   };
+}
+
+interface ExtractedFields {
+  subject?: string;
+  translation?: string;
+  pos?: string;
+  definition?: string;
+  points?: string[];
+  example?: string;
+  contrast?: string;
+  refs?: string;
+}
+
+const EXPANDED_STRING_FIELDS = [
+  "subject",
+  "translation",
+  "pos",
+  "definition",
+  "example",
+  "contrast",
+  "refs",
+] as const;
+
+// When the full payload fails JSON.parse (e.g. a single extra `\"` inside
+// one points entry breaks the whole document), recover what we can by
+// pulling each known field out via regex. Returns null when nothing usable
+// was found so the caller can drop to a code-fence fallback.
+function extractExpandedFieldsLenient(raw: string): Record<string, unknown> | null {
+  const out: Record<string, unknown> = {};
+  let found = false;
+  for (const field of EXPANDED_STRING_FIELDS) {
+    const re = new RegExp(`"${field}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"`, "s");
+    const m = re.exec(raw);
+    if (m && typeof m[1] === "string") {
+      const v = unescapeLenient(m[1]).trim();
+      if (v) {
+        out[field] = v;
+        found = true;
+      }
+    }
+  }
+  const arrMatch = /"points"\s*:\s*\[([\s\S]*?)\]/.exec(raw);
+  if (arrMatch && typeof arrMatch[1] === "string") {
+    const items = splitTopLevelCommas(arrMatch[1]);
+    const points: string[] = [];
+    for (const item of items) {
+      const unquoted = stripOuterJsonQuotes(item.trim());
+      if (unquoted === null) continue;
+      const v = unescapeLenient(unquoted).trim();
+      if (v) points.push(v);
+    }
+    if (points.length > 0) {
+      out.points = points;
+      found = true;
+    }
+  }
+  return found ? out : null;
+}
+
+// Walk the contents of a JSON array, splitting on commas that aren't
+// inside a quoted string. Honours `\"` as an in-string escape so a stray
+// escaped quote doesn't prematurely split an entry. Each returned item
+// keeps its surrounding quotes so `stripOuterJsonQuotes` can unwrap them
+// uniformly with the regex-extracted string fields.
+function splitTopLevelCommas(s: string): string[] {
+  const items: string[] = [];
+  let buf = "";
+  let inString = false;
+  let escape = false;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (escape) {
+      buf += ch;
+      escape = false;
+      continue;
+    }
+    if (ch === "\\" && inString) {
+      buf += ch;
+      escape = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      buf += ch;
+      continue;
+    }
+    if (ch === "," && !inString) {
+      items.push(buf);
+      buf = "";
+      continue;
+    }
+    buf += ch;
+  }
+  if (buf.length > 0) items.push(buf);
+  return items;
+}
+
+function stripOuterJsonQuotes(s: string): string | null {
+  if (s.length < 2 || s[0] !== '"' || s[s.length - 1] !== '"') return null;
+  return s.slice(1, -1);
+}
+
+// Apply common JSON-style escapes to a string that didn't go through
+// JSON.parse. Walks one backslash + one char per pass so double-backslash
+// sequences collapse correctly.
+function unescapeLenient(s: string): string {
+  return s.replace(/\\(.)/g, (_, ch: string) => {
+    switch (ch) {
+      case "n":
+        return "\n";
+      case "t":
+        return "\t";
+      case "r":
+        return "\r";
+      case '"':
+        return '"';
+      case "\\":
+        return "\\";
+      case "/":
+        return "/";
+      case "b":
+        return "\b";
+      case "f":
+        return "\f";
+      default:
+        return ch;
+    }
+  });
 }

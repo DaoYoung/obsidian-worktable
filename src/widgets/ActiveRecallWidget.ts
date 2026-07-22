@@ -219,16 +219,12 @@ export function mountActiveRecallWidget(containerEl: HTMLElement, context: Widge
       });
       pendingEntry = null;
       pendingName = "";
-      conceptName.value = "";
-      conceptContext.value = "";
-      preview.hidden = true;
-      previewSubject.hidden = true;
-      previewBody.empty();
+      await collapseConceptDraft();
     } catch (error) {
       conceptStatus.className = "kp-status err";
       conceptStatus.setText(`写入失败：${errorMessage(error)}`);
     } finally {
-      setPreviewButtonsDisabled(false);
+      if (!disposed) setPreviewButtonsDisabled(false);
     }
   }
 
@@ -240,6 +236,28 @@ export function mountActiveRecallWidget(containerEl: HTMLElement, context: Widge
     previewBody.empty();
     conceptStatus.className = "kp-status";
     conceptStatus.setText("已取消（未写入）");
+  }
+
+  async function collapseConceptDraft(): Promise<void> {
+    const previewWasVisible = !preview.hidden;
+    conceptRow.classList.add("is-collapsing");
+    if (previewWasVisible) preview.classList.add("is-collapsing");
+
+    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    if (!reducedMotion) {
+      await new Promise<void>((resolve) => {
+        window.setTimeout(resolve, 300);
+      });
+    }
+    if (disposed) return;
+
+    conceptName.value = "";
+    conceptContext.value = "";
+    preview.hidden = true;
+    previewSubject.hidden = true;
+    previewBody.empty();
+    conceptRow.classList.remove("is-collapsing");
+    preview.classList.remove("is-collapsing");
   }
 
   function setPreviewButtonsDisabled(disabled: boolean): void {

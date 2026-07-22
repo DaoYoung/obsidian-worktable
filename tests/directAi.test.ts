@@ -86,6 +86,51 @@ describe("DirectAiClient - expandKnowledge", () => {
     expect(entry.subject).toBe("");
   });
 
+  it("recovers usable fields via regex when JSON has malformed escapes", async () => {
+    // Construct a payload where the AI emitted a malformed escape inside
+    // one points entry that breaks JSON.parse for the whole document.
+    // Drop the closing brace so the document is genuinely unparseable —
+    // the previous version of this fixture was technically valid JSON
+    // and silently exercised the strict-parse happy path instead of
+    // the lenient fallback we're trying to cover here.
+    const malformed = [
+      "{",
+      '"subject":"英文词汇",',
+      '"translation":"具体的;实在的;混凝土",',
+      '"pos":"adj.",',
+      '"definition":"concrete 的解释",',
+      '"points":["形容词含义","名词含义","常见搭配","动词用法\\\\"使具体化\\\\"\\\\""],',
+      '"example":"",',
+      '"contrast":"与 specific 区别",',
+      '"refs":""',
+      // (intentionally no closing brace — json.loads / JSON.parse rejects)
+    ].join("");
+    expect(() => JSON.parse(malformed)).toThrow();
+    fetchMock.mockResolvedValueOnce(jsonResponse({ content: [{ type: "text", text: malformed }] }));
+    const client = new DirectAiClient({ provider: "anthropic", apiKey: "k", baseUrl: "https://x", model: "m" });
+    const entry = await client.expandKnowledge("concrete");
+    expect(entry.subject).toBe("英文词汇");
+    expect(entry.translation).toContain("混凝土");
+    expect(entry.pos).toBe("adj.");
+    expect(entry.markdown).toContain("# 英文词汇");
+    expect(entry.markdown).toContain("形容词含义");
+    expect(entry.markdown).toContain("名词含义");
+    // The raw JSON payload must not be rendered as prose.
+    expect(entry.markdown).not.toMatch(/^\{.*"subject".*\}[\s\S]*$/);
+  });
+
+  it("wraps the raw payload in a code fence when no field can be extracted", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ content: [{ type: "text", text: "completely broken response with no JSON at all" }] }),
+    );
+    const client = new DirectAiClient({ provider: "anthropic", apiKey: "k", baseUrl: "https://x", model: "m" });
+    const entry = await client.expandKnowledge("自由能");
+    expect(entry.subject).toBe("");
+    // Raw text is fenced, not pasted as prose.
+    expect(entry.markdown).toContain("```");
+    expect(entry.markdown).toContain("completely broken response");
+  });
+
   it("throws CloakfetchError on non-2xx responses", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: { message: "invalid key" } }, 401));
     const client = new DirectAiClient({ provider: "anthropic", apiKey: "bad", baseUrl: "https://x", model: "m" });

@@ -568,12 +568,43 @@
 
 /* ── Concept preview (two-stage write) ───────────────────── */
 
+.worktable .learn-concept-row,
+.worktable .kp-preview {
+  max-height: 480px;
+  overflow: hidden;
+  opacity: 1;
+  transition: max-height 0.3s ease, opacity 0.2s ease, margin 0.3s ease, padding 0.3s ease, border-width 0.3s ease;
+}
+
 .worktable .kp-preview {
   background: var(--background-primary, #fff);
   border: 1px solid var(--background-modifier-border, #d8d8d8);
   border-radius: 8px;
   padding: 12px;
   margin-top: 10px;
+}
+
+.worktable .learn-concept-row.is-collapsing,
+.worktable .kp-preview.is-collapsing {
+  max-height: 0;
+  opacity: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.worktable .kp-preview.is-collapsing {
+  padding-top: 0;
+  padding-bottom: 0;
+  border-width: 0;
+}
+
+.worktable .kp-preview[hidden] { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .worktable .learn-concept-row,
+  .worktable .kp-preview {
+    transition: none;
+  }
 }
 
 .worktable .kp-preview-h {

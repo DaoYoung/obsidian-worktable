@@ -356,6 +356,67 @@ class TestPayloadLimits(unittest.TestCase):
         srv.shutdown()
 
 
+class TestExpandedFieldExtraction(unittest.TestCase):
+    """Regression tests for the lenient fallback that runs when the AI
+    emits a malformed escape inside one points entry."""
+
+    def test_extracts_simple_string_fields(self):
+        raw = (
+            '{"subject":"英文词汇","translation":"具体的;实在的;混凝土",'
+            '"pos":"adj.","definition":"concrete 的解释",'
+            '"points":["a","b"],"example":"","contrast":"x","refs":""}'
+        )
+        out = server._extract_expanded_fields_lenient(raw)
+        self.assertIsNotNone(out)
+        self.assertEqual(out["subject"], "英文词汇")
+        self.assertEqual(out["translation"], "具体的;实在的;混凝土")
+        self.assertEqual(out["pos"], "adj.")
+        self.assertEqual(out["definition"], "concrete 的解释")
+        self.assertEqual(out["contrast"], "x")
+        self.assertEqual(out["points"], ["a", "b"])
+
+    def test_recovers_when_points_entry_has_extra_escape(self):
+        # An extra unescaped `"` inside the last points entry breaks strict
+        # json.loads, but per-field regex extraction still yields the
+        # surrounding fields and the well-formed entries.
+        raw = (
+            '{"subject":"英文词汇","translation":"具体的;实在的;混凝土",'
+            '"pos":"adj.","definition":"d",'
+            '"points":["形容词","名词","搭配","动词用法"使具体化"x"],'
+            '"example":"","contrast":"x","refs":""}'
+        )
+        self.assertIsNone(_try_json_loads(raw), "fixture must be unparseable to exercise the fallback")
+        out = server._extract_expanded_fields_lenient(raw)
+        self.assertIsNotNone(out)
+        self.assertEqual(out["subject"], "英文词汇")
+        self.assertEqual(out["translation"], "具体的;实在的;混凝土")
+        self.assertEqual(out["pos"], "adj.")
+        self.assertIn("形容词", out.get("points", []))
+        self.assertIn("名词", out.get("points", []))
+
+    def test_returns_none_when_no_known_fields_present(self):
+        out = server._extract_expanded_fields_lenient("completely unrelated text")
+        self.assertIsNone(out)
+
+    def test_unescape_lenient_collapses_double_backslash(self):
+        # `\\n` should become `\n` (one backslash + n), not a newline.
+        self.assertEqual(server._unescape_lenient(r"\\n"), "\\n")
+        # Single `\n` becomes a real newline.
+        self.assertEqual(server._unescape_lenient(r"\n"), "\n")
+        # Single `\"` becomes `"`.
+        self.assertEqual(server._unescape_lenient(r"\""), '"')
+        # Doubled-escaped quote `\\"` becomes `\"` (backslash + quote).
+        self.assertEqual(server._unescape_lenient(r"\\\""), "\\\"")
+
+
+def _try_json_loads(raw):
+    import json as _json
+    try:
+        return _json.loads(raw)
+    except Exception:
+        return None
+
+
 class TestURLValidation(unittest.TestCase):
     """Test SSRF protection via _is_url_safe."""
 

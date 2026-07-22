@@ -733,11 +733,56 @@ def _expand_knowledge_point(name: str, context: str = "") -> dict:
         pos = _clean_pos(_unescape_newlines(str(obj.get("pos", ""))).strip())
         return {"subject": subject, "translation": translation, "pos": pos, "markdown": md, "raw": raw}
 
+    # Strict JSON.parse failed. The model occasionally emits a malformed
+    # escape (e.g. an extra `\"` inside one points entry) that breaks the
+    # whole payload. Fall back to per-field regex extraction so the user
+    # still gets a usable Markdown card; if even that yields nothing,
+    # surface the raw response inside a fenced code block so the broken
+    # state is visibly broken instead of being mistaken for prose.
+    extracted = _extract_expanded_fields_lenient(raw)
+    if extracted:
+        drop_examples = is_english_word
+        parts = []
+        defn = _unescape_newlines(extracted.get("definition", "")).strip()
+        if defn:
+            parts.append(f"## 是什么\n\n{defn}\n")
+        pts = extracted.get("points") or []
+        if isinstance(pts, list) and pts:
+            bullets = "\n".join(
+                f"- {_unescape_newlines(str(p)).strip()}"
+                for p in pts
+                if _unescape_newlines(str(p)).strip()
+            )
+            if bullets:
+                parts.append(f"## 关键要点\n\n{bullets}\n")
+        if not drop_examples:
+            example = _unescape_newlines(extracted.get("example", "")).strip()
+            if example and not _looks_like_code(example):
+                parts.append(f"## 示例\n\n{example}\n")
+        contrast = _unescape_newlines(extracted.get("contrast", "")).strip()
+        if contrast and not (drop_examples and _looks_like_code(contrast)):
+            parts.append(f"## 易混淆 / 对比\n\n{contrast}\n")
+        refs = _unescape_newlines(extracted.get("refs", "")).strip()
+        if refs:
+            parts.append(f"## 参考资料\n\n{refs}\n")
+        md_body = "\n".join(parts)
+        if md_body:
+            md = md_body[:6000]
+        else:
+            notice = "> AI 返回的格式无法解析，已按原文展示，请点击「重新生成」重试。\n\n"
+            md = (notice + f"```\n{_unescape_newlines(raw.strip())[:6000]}\n```")[:6000]
+        subject = _clean_subject(_unescape_newlines(extracted.get("subject", "")).strip(), fallback=("英文词汇" if is_english_word else "其他"))
+        translation = _unescape_newlines(extracted.get("translation", "")).strip()
+        pos = _clean_pos(_unescape_newlines(extracted.get("pos", "")).strip())
+        return {"subject": subject, "translation": translation, "pos": pos, "markdown": md, "raw": raw}
+
     fence = re.search(r"```(?:markdown|md)?\s*([\s\S]*?)```", raw)
     if fence:
-        md = _unescape_newlines(fence.group(1).strip())[:6000]
+        md_body = _unescape_newlines(fence.group(1).strip())[:6000]
     else:
-        md = _unescape_newlines(raw.strip())[:6000]
+        notice = "> AI 返回的格式无法解析，已按原文展示，请点击「重新生成」重试。\n\n"
+        md_body = (notice + f"```\n{_unescape_newlines(raw.strip())[:6000]}\n```")[:6000]
+    md = md_body
     return {"subject": ("英文词汇" if is_english_word else "其他"), "translation": "", "pos": "", "markdown": md, "raw": raw}
 
 
@@ -786,6 +831,120 @@ def _clean_pos(raw: str) -> str:
         return ""
     key = raw.strip().lower().rstrip(".")
     return _POS_ALIASES.get(key, raw.strip())
+
+
+# ── Lenient JSON field extraction ───────────────────────────────────────────
+# When the AI returns malformed JSON (e.g. an extra `\"` inside one points
+# entry), `json.loads` rejects the whole payload and we'd otherwise render
+# the raw JSON to the user as if it were prose. The helpers below recover
+# individual known fields via regex so the user still sees a structured
+# Markdown card.
+
+_EXPANDED_STRING_FIELDS = (
+    "subject", "translation", "pos", "definition",
+    "example", "contrast", "refs",
+)
+
+
+def _unescape_lenient(s: str) -> str:
+    """Apply common JSON-style escapes to a string that didn't go through
+    json.loads. Walks one backslash + one char per pass so double-backslash
+    sequences collapse correctly without double-un-escaping."""
+    result = []
+    i = 0
+    while i < len(s):
+        ch = s[i]
+        if ch == "\\" and i + 1 < len(s):
+            nxt = s[i + 1]
+            mapping = {
+                "n": "\n", "t": "\t", "r": "\r",
+                '"': '"', "\\": "\\", "/": "/",
+                "b": "\b", "f": "\f",
+            }
+            if nxt in mapping:
+                result.append(mapping[nxt])
+                i += 2
+                continue
+            result.append(nxt)
+            i += 2
+            continue
+        result.append(ch)
+        i += 1
+    return "".join(result)
+
+
+def _strip_outer_json_quotes(s: str) -> str | None:
+    if len(s) < 2 or not s.startswith('"') or not s.endswith('"'):
+        return None
+    return s[1:-1]
+
+
+def _split_top_level_commas(s: str) -> list[str]:
+    """Split a JSON array body on commas that aren't inside a quoted string.
+    Honours backslash-escaped quotes so a stray escape doesn't prematurely
+    split an entry. Each returned item keeps its surrounding quotes so
+    `_strip_outer_json_quotes` can unwrap them uniformly with the
+    regex-extracted string fields."""
+    items: list[str] = []
+    buf: list[str] = []
+    in_string = False
+    escape = False
+    for ch in s:
+        if escape:
+            buf.append(ch)
+            escape = False
+            continue
+        if ch == "\\" and in_string:
+            buf.append(ch)
+            escape = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            buf.append(ch)
+            continue
+        if ch == "," and not in_string:
+            items.append("".join(buf))
+            buf = []
+            continue
+        buf.append(ch)
+    if buf:
+        items.append("".join(buf))
+    return items
+
+
+def _extract_expanded_fields_lenient(raw: str) -> dict | None:
+    """Best-effort per-field extraction when the full payload fails json.loads.
+    Returns a dict shaped like the parsed object, or None when no field
+    could be recovered."""
+    # Limit the search to the first balanced JSON object so trailing prose
+    # or a second payload doesn't confuse the regex.
+    obj_match = re.search(r"\{[\s\S]*\}", raw)
+    candidate = obj_match.group(0) if obj_match else raw
+
+    out: dict = {}
+    found = False
+    for field in _EXPANDED_STRING_FIELDS:
+        m = re.search(rf'"{re.escape(field)}"\s*:\s*"((?:\\.|[^"\\])*)"', candidate)
+        if m:
+            value = _unescape_lenient(m.group(1)).strip()
+            if value:
+                out[field] = value
+                found = True
+    arr_match = re.search(r'"points"\s*:\s*\[([\s\S]*?)\]', candidate)
+    if arr_match:
+        items = _split_top_level_commas(arr_match.group(1))
+        points: list[str] = []
+        for item in items:
+            unquoted = _strip_outer_json_quotes(item.strip())
+            if unquoted is None:
+                continue
+            v = _unescape_lenient(unquoted).strip()
+            if v:
+                points.append(v)
+        if points:
+            out["points"] = points
+            found = True
+    return out if found else None
 
 
 # ── HTTP handler ──────────────────────────────────────────────────────────────
