@@ -518,6 +518,13 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
 
   function tick(): void {
     if (!state.running || _finishing) return;
+    // Self-terminate an orphaned ticker: if this widget's DOM was detached by
+    // a re-render/remount, stop ticking so a leaked instance can never record
+    // a phantom session in the background.
+    if (!wrap.isConnected) {
+      stopTicker();
+      return;
+    }
     if (state.endsAt == null) {
       state.running = false;
       return;

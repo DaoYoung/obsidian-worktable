@@ -34,7 +34,7 @@ function getWidgetDescriptors(): WidgetDescriptor[] {
 
 export class WorktableView extends ItemView {
   private readonly plugin: ObsidianWorktablePlugin;
-  private readonly widgetComponent: Component;
+  private widgetComponent: Component;
   private sections: SectionContainer[] = [];
   private greetingEl: HTMLElement | null = null;
 
@@ -69,6 +69,15 @@ export class WorktableView extends ItemView {
   private async render(): Promise<void> {
     const container = this.containerEl.children[1] as HTMLElement | undefined;
     if (!container) return;
+    // Obsidian may invoke onOpen()/render() again on the SAME view instance
+    // (leaf moved between splits, re-displayed, setViewState re-entry) without
+    // a matching onClose(). Emptying the container detaches the old widget DOM
+    // but does NOT stop the intervals/listeners registered on widgetComponent
+    // — a leaked pomodoro ticker would keep running in the background and
+    // record phantom sessions. Tear down the previous component and start a
+    // fresh one so every render owns exactly one set of widgets.
+    this.widgetComponent.unload();
+    this.widgetComponent = new Component();
     container.empty();
     container.addClass("worktable");
 
