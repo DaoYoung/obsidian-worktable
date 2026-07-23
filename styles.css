@@ -1,6 +1,6 @@
 /* ===========================================================================
    Obsidian Worktable — Built Styles
-   Generated: 2026-07-22T09-43-49
+   Generated: 2026-07-23T09-18-46
    Sources:
  *  - src/styles/base.css
  *  - src/styles/productivity.css
@@ -1308,6 +1308,22 @@
   user-select: none;
 }
 .worktable .pomo-stale-remember input { margin: 0; }
+
+.worktable .pomo-continue-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  border-radius: 6px;
+  background: rgba(46, 204, 113, 0.12);
+  border: 1px solid rgba(46, 204, 113, 0.45);
+  color: var(--text-normal);
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+.worktable .pomo-continue-banner[hidden] { display: none; }
+.worktable .pomo-continue-text { flex: 1 1 220px; }
 
 
 /* ============================================================

@@ -187,6 +187,27 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
   staleBanner.appendChild(staleKeepBtn);
   wrap.appendChild(staleBanner);
 
+  // Continue-prompt banner — surfaced when a round finishes while "自动" is on.
+  // Instead of silently rolling into the next segment, we ask the user whether
+  // to start it. 开始 → start the next round; 取消 → leave it paused/stopped.
+  const continueBanner = document.createElement("div");
+  continueBanner.className = "pomo-continue-banner";
+  continueBanner.setAttribute("hidden", "");
+  const continueText = document.createElement("span");
+  continueText.className = "pomo-continue-text";
+  continueBanner.appendChild(continueText);
+  const continueStartBtn = document.createElement("button");
+  continueStartBtn.className = "pomo-ctrl primary";
+  continueStartBtn.type = "button";
+  continueStartBtn.textContent = "▶ 开始";
+  continueBanner.appendChild(continueStartBtn);
+  const continueCancelBtn = document.createElement("button");
+  continueCancelBtn.className = "pomo-ctrl ghost";
+  continueCancelBtn.type = "button";
+  continueCancelBtn.textContent = "✕ 取消";
+  continueBanner.appendChild(continueCancelBtn);
+  wrap.appendChild(continueBanner);
+
   // ── Layout ────────────────────────────────────────────────────────────────
   const row = document.createElement("div");
   row.className = "pomo-row";
@@ -526,6 +547,7 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
 
   async function start(): Promise<void> {
     if (state.running) return;
+    continueBanner.setAttribute("hidden", "");
     if (state.pausedRemain != null) {
       state.endsAt = Date.now() + state.pausedRemain * 1000;
       state.pausedRemain = null;
@@ -552,6 +574,7 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
 
   function reset(): void {
     stopTicker();
+    continueBanner.setAttribute("hidden", "");
     state.running = false;
     state.endsAt = null;
     state.pausedRemain = null;
@@ -613,13 +636,18 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
         nextMode = "work";
         nextMin = DURATIONS.work;
       }
+      // Prepare the next segment but do NOT start ticking — instead prompt the
+      // user via the continue banner. The ring shows the next mode's full
+      // duration while we wait for a decision.
       state.mode = nextMode;
       state.durationMin = nextMin;
-      state.endsAt = Date.now() + nextMin * 60 * 1000;
-      state._currentStart = Date.now();
-      state.running = true;
-      startTicker();
-      tick();
+      state.endsAt = null;
+      state._currentStart = null;
+      state.running = false;
+      btnStart.textContent = "▶ 开始";
+      saveState(state);
+      continueText.textContent = `本轮结束,开始下一环节「${MODE_LABELS[nextMode]} ${nextMin} 分钟」?`;
+      continueBanner.removeAttribute("hidden");
     } else {
       state.endsAt = null;
       state._currentStart = null;
@@ -633,6 +661,7 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
 
   function switchMode(mode: PomState["mode"], duration: number): void {
     stopTicker();
+    continueBanner.setAttribute("hidden", "");
     state.running = false;
     state.endsAt = null;
     state.pausedRemain = null;
@@ -827,6 +856,18 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
     state.stalePromptDate = new Date().toDateString();
     saveState(state);
     staleBanner.setAttribute("hidden", "");
+  });
+
+  // Continue-prompt buttons. 开始 rolls into the next (already-prepared)
+  // segment; 取消 leaves it paused/stopped so the user can start it manually
+  // later via the 开始 control.
+  continueStartBtn.addEventListener("click", () => {
+    continueBanner.setAttribute("hidden", "");
+    void start();
+  });
+  continueCancelBtn.addEventListener("click", () => {
+    continueBanner.setAttribute("hidden", "");
+    render();
   });
 
   // ── Init ──────────────────────────────────────────────────────────────────
