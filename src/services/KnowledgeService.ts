@@ -1050,16 +1050,20 @@ function sourceSignature(
 
 async function readReviewVaultFile(app: App, file: ReviewSourceFile): Promise<string> {
   const vault = app.vault as unknown as {
-    read?: (file: unknown) => Promise<string>;
     adapter?: { read?: (path: string) => Promise<string> };
   };
-  if (typeof vault.read === "function") {
-    return vault.read({ path: file.path } as TFile);
-  }
   if (typeof vault.adapter?.read === "function") {
     return vault.adapter.read(file.path);
   }
-  throw new Error("Vault read API unavailable");
+  // Some Obsidian test environments inject a stub vault without adapter.
+  // Fall back to calling vault.read with a real TFile looked up by path.
+  const tfile = (app.vault as unknown as {
+    getAbstractFileByPath?: (path: string) => TFile | null;
+  }).getAbstractFileByPath?.(file.path);
+  if (!tfile) {
+    throw new Error("Vault read API unavailable");
+  }
+  return (app.vault as unknown as { read: (file: TFile) => Promise<string> }).read(tfile);
 }
 
 /** Read and aggregate all configured Markdown sources for the Review widget. */

@@ -659,23 +659,10 @@ interface FakeReviewFolder {
 interface FakeReviewApp {
   vault: {
     getAbstractFileByPath: (path: string) => unknown;
-    read: (file: { path: string }) => Promise<string>;
-  };
-}
-
-function makeReviewApp(tree: Map<string, FakeReviewFile | FakeReviewFolder>): FakeReviewApp {
-  return {
-    vault: {
-      getAbstractFileByPath: (path) => tree.get(path) ?? null,
-      read: async (file) => {
-        const node = tree.get(file.path);
-        if (!node || "children" in node) {
-          throw new Error(`not a file: ${file.path}`);
-        }
-        return (tree.get(file.path) as { content?: string } & FakeReviewFile) &&
-          (Reflect.get(tree.get(file.path) as object, "content") as string | undefined) || "";
-      },
-    },
+    read?: (file: { path: string }) => Promise<string>;
+    adapter: {
+      read: (path: string) => Promise<string>;
+    };
   };
 }
 
@@ -742,7 +729,7 @@ describe("KnowledgeService - discoverReviewSourceFiles", () => {
     const app: FakeReviewApp = {
       vault: {
         getAbstractFileByPath: (path) => (path === "notes" ? folder : null),
-        read: async () => "",
+        adapter: { read: async () => "" },
       },
     };
     const out = discoverReviewSourceFiles(app as never, [
@@ -760,7 +747,7 @@ describe("KnowledgeService - discoverReviewSourceFiles", () => {
         getAbstractFileByPath: (path) => (path === "exists.md"
           ? { path: "exists.md", mtime: 1, size: 1 }
           : null),
-        read: async () => "",
+        adapter: { read: async () => "" },
       },
     };
     const out = discoverReviewSourceFiles(app as never, [
@@ -811,17 +798,15 @@ describe("KnowledgeService - loadReviewKnowledgeSources", () => {
         },
       ],
     };
+    const reviewMap: Record<string, string> = {
+      "notes/words.md": REVIEW_WORD_MD,
+      "notes/math.md": REVIEW_MATH_MD,
+      "notes/sub/physics.md": REVIEW_SUBJECT_MD,
+    };
     const app: FakeReviewApp = {
       vault: {
         getAbstractFileByPath: (path) => (path === "notes" ? folder : null),
-        read: async (file) => {
-          const map: Record<string, string> = {
-            "notes/words.md": REVIEW_WORD_MD,
-            "notes/math.md": REVIEW_MATH_MD,
-            "notes/sub/physics.md": REVIEW_SUBJECT_MD,
-          };
-          return map[file.path] ?? "";
-        },
+        adapter: { read: async (path) => reviewMap[path] ?? "" },
       },
     };
     const data = await loadReviewKnowledgeSources(app as never, [
@@ -851,10 +836,12 @@ describe("KnowledgeService - loadReviewKnowledgeSources", () => {
     const app: FakeReviewApp = {
       vault: {
         getAbstractFileByPath: (path) => store.get(path) ?? null,
-        read: async (file) => {
-          if (file.path === "bad.md") throw new Error("mock boom");
-          const node = store.get(file.path) as (FakeReviewFile & { content: string });
-          return node.content;
+        adapter: {
+          read: async (path) => {
+            if (path === "bad.md") throw new Error("mock boom");
+            const node = store.get(path) as (FakeReviewFile & { content: string });
+            return node.content;
+          },
         },
       },
     };
@@ -874,7 +861,7 @@ describe("KnowledgeService - loadReviewKnowledgeSources", () => {
         getAbstractFileByPath: (path) => path === "x.md"
           ? { path: "x.md", mtime: 100, size: 50 }
           : null,
-        read: async () => "",
+        adapter: { read: async () => "" },
       },
     };
     const a = discoverReviewSourceFiles(app as never, [
@@ -885,7 +872,7 @@ describe("KnowledgeService - loadReviewKnowledgeSources", () => {
         getAbstractFileByPath: (path) => path === "x.md"
           ? { path: "x.md", mtime: 200, size: 50 }
           : null,
-        read: async () => "",
+        adapter: { read: async () => "" },
       },
     };
     const b = discoverReviewSourceFiles(app2 as never, [
