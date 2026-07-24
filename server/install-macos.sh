@@ -72,9 +72,9 @@ cat > "$LAUNCHD_PLIST" << PLIST
   <array>
     <string>${VENV_PYTHON}</string>
     <string>${REPO_CURRENT}/server/server.py</string>
-    <key>WorkingDirectory</key>
-    <string>${REPO_CURRENT}</string>
   </array>
+  <key>WorkingDirectory</key>
+  <string>${REPO_CURRENT}</string>
   <key>RunAtLoad</key>
   <true/>
   <key>KeepAlive</key>
