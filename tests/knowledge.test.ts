@@ -673,8 +673,8 @@ const REVIEW_WORD_MD = [
   "",
   "| 单词 | 释义 |",
   "|:----:|------|",
-  "| alpha | 第一 |",
-  "| beta  | 第二 |",
+  "| alpha | **第一**，希腊字母首 |",
+  "| beta  | `code` 第二 |",
   "",
 ].join("\n");
 
@@ -781,6 +781,17 @@ describe("KnowledgeService - loadReviewKnowledgeSources", () => {
           };
           if (!map[file.path]) throw new Error(`unknown: ${file.path}`);
           return map[file.path] ?? "";
+        },
+        adapter: {
+          read: async (path) => {
+            const map: Record<string, string> = {
+              "notes/words.md": REVIEW_WORD_MD,
+              "notes/math.md": REVIEW_MATH_MD,
+              "notes/sub/physics.md": REVIEW_SUBJECT_MD,
+            };
+            if (!map[path]) throw new Error(`unknown: ${path}`);
+            return map[path] ?? "";
+          },
         },
       },
     };

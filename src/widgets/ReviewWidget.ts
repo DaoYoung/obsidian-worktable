@@ -307,11 +307,7 @@ export function mountReviewWidget(containerEl: HTMLElement, context: WidgetConte
       revealButton.setText(opening ? "🔼 收起" : "📖 定义解释");
       if (opening && !rendered) {
         rendered = true;
-        if (entry.discipline === "word") {
-          body.setText(entry.def);
-        } else {
-          void MarkdownRenderer.render(app, entry.def ?? "", body, entry.sourcePath, component);
-        }
+        void MarkdownRenderer.render(app, entry.def ?? "", body, entry.sourcePath, component);
       }
     });
     return card;
