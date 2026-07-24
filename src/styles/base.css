@@ -108,6 +108,41 @@
   margin-top: 2px;
 }
 
+.worktable-review-sources {
+  margin: -8px 0 16px;
+}
+
+.worktable-review-sources .setting-item {
+  border-top: 1px solid var(--background-modifier-border);
+  padding: 8px 0;
+}
+
+.worktable-review-sources .setting-item-control {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.worktable-review-sources input[type="text"] {
+  min-width: 12rem;
+  flex: 1 1 14rem;
+}
+
+@media (max-width: 600px) {
+  .worktable-review-sources .setting-item-info {
+    flex: 1 1 100%;
+  }
+
+  .worktable-review-sources .setting-item-control {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .worktable-review-sources input[type="text"] {
+    min-width: 0;
+    flex-basis: 10rem;
+  }
+}
+
 /* Service status */
 .worktable-status {
   display: flex;

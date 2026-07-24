@@ -967,6 +967,82 @@
   background: var(--background-modifier-hover, #ececec);
 }
 
+.worktable .home-review-source {
+  font-size: 11px;
+  color: var(--text-muted, #666);
+  margin-bottom: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.worktable .home-review-source .src-label {
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.worktable .home-review-source .src-links {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  color: var(--text-normal, #1a1a1a);
+}
+
+.worktable .home-review-source a {
+  color: #3498db;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.worktable .home-review-source a:hover {
+  text-decoration: underline;
+}
+
+.worktable .home-review-warnings {
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(243, 156, 18, 0.1);
+  border: 1px solid rgba(243, 156, 18, 0.45);
+  font-size: 12px;
+  color: var(--text-muted, #666);
+  line-height: 1.5;
+}
+
+.worktable .home-review-warnings[hidden] { display: none; }
+
+.worktable .home-review-warnings ul {
+  list-style: disc;
+  padding-left: 18px;
+  margin: 4px 0 0;
+}
+
+.worktable .home-review-warnings-h {
+  font-weight: 600;
+  color: #b7791f;
+  margin-bottom: 4px;
+}
+
+.worktable .home-review-source-card {
+  font-size: 11px;
+  color: var(--text-muted, #666);
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.worktable .home-review-source-card a {
+  color: #3498db;
+  text-decoration: none;
+}
+
+.worktable .home-review-source-card a:hover {
+  text-decoration: underline;
+}
+
 /* Onboarding banner shown at the top of the Learning widget so users
  * immediately know whether the widget works without a local Cloakfetch
  * service. Active (greenish) = direct AI is configured. Inactive (muted)

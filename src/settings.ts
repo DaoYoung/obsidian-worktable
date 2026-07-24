@@ -7,8 +7,41 @@ import { renderServiceSetup } from "./settingsServiceSetup";
 
 export type AiProvider = AiProviderId;
 
+export type ReviewSource =
+  | { type: "file"; path: string }
+  | { type: "folder"; path: string };
+
+export function normalizeReviewSource(raw: unknown): ReviewSource | null {
+  if (!raw || typeof raw !== "object") return null;
+  const value = raw as Record<string, unknown>;
+  if (value.type !== "file" && value.type !== "folder") return null;
+  if (typeof value.path !== "string") return null;
+  const path = value.path.trim().replace(/^\/+/, "").replace(/\/+$/, "");
+  return path ? { type: value.type, path } : null;
+}
+
+export function resolveReviewSources(
+  settings: Pick<WorktableSettings, "knowledgeFile" | "reviewSources">,
+): ReviewSource[] {
+  const raw = Array.isArray(settings.reviewSources) ? settings.reviewSources : [];
+  const seen = new Set<string>();
+  const sources: ReviewSource[] = [];
+  for (const item of raw) {
+    const source = normalizeReviewSource(item);
+    if (!source) continue;
+    const key = `${source.type}:${source.path}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    sources.push(source);
+  }
+  if (sources.length > 0) return sources;
+  const fallback = String(settings.knowledgeFile ?? "").trim() || DEFAULT_SETTINGS.knowledgeFile;
+  return [{ type: "file", path: fallback.replace(/^\/+/, "") }];
+}
+
 export interface WorktableSettings {
   knowledgeFile: string;
+  reviewSources: ReviewSource[];
   newsFolder: string;
   serviceBaseUrl: string;
   openOnStartup: boolean;
@@ -25,6 +58,7 @@ export interface WorktableSettings {
 
 export const DEFAULT_SETTINGS: WorktableSettings = {
   knowledgeFile: "plans/知识点.md",
+  reviewSources: [],
   newsFolder: "news",
   serviceBaseUrl: "http://127.0.0.1:8765",
   openOnStartup: true,
@@ -80,6 +114,102 @@ export class WorktableSettingTab extends PluginSettingTab {
             this.plugin.settings.knowledgeFile = value.trim() || DEFAULT_SETTINGS.knowledgeFile;
             await this.plugin.saveSettings();
           })
+      );
+
+    new Setting(containerEl)
+      .setName(t.reviewSourcesName)
+      .setDesc(t.reviewSourcesDesc)
+      .setHeading();
+
+    const reviewSourcesEl = containerEl.createDiv({ cls: "worktable-review-sources" });
+    const rawReviewSources = Array.isArray(this.plugin.settings.reviewSources)
+      ? this.plugin.settings.reviewSources
+      : [];
+    const configuredSources = rawReviewSources
+      .map((raw, index) => ({ source: normalizeReviewSource(raw), index }))
+      .filter(
+        (entry): entry is { source: ReviewSource; index: number } => entry.source !== null,
+      );
+
+    for (const { source, index } of configuredSources) {
+      new Setting(reviewSourcesEl)
+        .setName(source.type === "file" ? t.reviewSourceTypeFile : t.reviewSourceTypeFolder)
+        .addDropdown((dropdown) =>
+          dropdown
+            .addOption("file", t.reviewSourceTypeFile)
+            .addOption("folder", t.reviewSourceTypeFolder)
+            .setValue(source.type)
+            .onChange(async (value) => {
+              const nextType: ReviewSource["type"] = value === "folder" ? "folder" : "file";
+              const current = rawReviewSources[index];
+              if (!current) return;
+              this.plugin.settings.reviewSources[index] = {
+                type: nextType,
+                path: typeof current.path === "string" ? current.path : source.path,
+              };
+              await this.plugin.saveSettings();
+              this.display();
+            }),
+        )
+        .addText((text) =>
+          text
+            .setPlaceholder(source.type === "file" ? "plans/知识点.md" : "plans")
+            .setValue(source.path)
+            .onChange(async (value) => {
+              const current = rawReviewSources[index];
+              if (!current) return;
+              this.plugin.settings.reviewSources[index] = {
+                type: current.type === "folder" ? "folder" : "file",
+                path: value.trim(),
+              };
+              await this.plugin.saveSettings();
+            }),
+        )
+        .addButton((button) =>
+          button.setButtonText(t.reviewSourceRemove).onClick(async () => {
+            this.plugin.settings.reviewSources.splice(index, 1);
+            await this.plugin.saveSettings();
+            this.display();
+          }),
+        );
+    }
+
+    let newSourceType: ReviewSource["type"] = "file";
+    let newSourcePath = "";
+    new Setting(reviewSourcesEl)
+      .setName(t.reviewSourceAdd)
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOption("file", t.reviewSourceTypeFile)
+          .addOption("folder", t.reviewSourceTypeFolder)
+          .setValue(newSourceType)
+          .onChange((value) => {
+            newSourceType = value === "folder" ? "folder" : "file";
+          }),
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder("plans/知识点.md")
+          .onChange((value) => {
+            newSourcePath = value;
+          }),
+      )
+      .addButton((button) =>
+        button.setButtonText(t.reviewSourceAdd).onClick(async () => {
+          const source = normalizeReviewSource({ type: newSourceType, path: newSourcePath });
+          if (!source) return;
+          if (!Array.isArray(this.plugin.settings.reviewSources)) {
+            this.plugin.settings.reviewSources = [];
+          }
+          const duplicate = this.plugin.settings.reviewSources.some((item) => {
+            const existing = normalizeReviewSource(item);
+            return existing?.type === source.type && existing.path === source.path;
+          });
+          if (duplicate) return;
+          this.plugin.settings.reviewSources.push(source);
+          await this.plugin.saveSettings();
+          this.display();
+        }),
       );
 
     new Setting(containerEl)

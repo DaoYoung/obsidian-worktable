@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  discoverReviewSourceFiles,
   inferCategory,
+  loadReviewKnowledgeSources,
   normalizePos,
   normalizeSubject,
+  parseKnowledgeMd,
   parseWordFromJson,
   parseWordFromMd,
-  parseKnowledgeMd,
   POS_SECTION,
   reorganizeKpFile,
   reorganizeKpFileWithOptions,
@@ -640,5 +642,255 @@ describe("KnowledgeService - dedup-by-name across categories", () => {
     expect(text).toContain("新增 **alpha** · 英文词汇");
     // 新条目按 maxN+1 入册
     expect(text).toMatch(/### \d+\.\d+ 完全不存在的新条目/);
+  });
+});
+
+interface FakeReviewFile {
+  path: string;
+  mtime: number;
+  size: number;
+}
+
+interface FakeReviewFolder {
+  path: string;
+  children: unknown[];
+}
+
+interface FakeReviewApp {
+  vault: {
+    getAbstractFileByPath: (path: string) => unknown;
+    read: (file: { path: string }) => Promise<string>;
+  };
+}
+
+function makeReviewApp(tree: Map<string, FakeReviewFile | FakeReviewFolder>): FakeReviewApp {
+  return {
+    vault: {
+      getAbstractFileByPath: (path) => tree.get(path) ?? null,
+      read: async (file) => {
+        const node = tree.get(file.path);
+        if (!node || "children" in node) {
+          throw new Error(`not a file: ${file.path}`);
+        }
+        return (tree.get(file.path) as { content?: string } & FakeReviewFile) &&
+          (Reflect.get(tree.get(file.path) as object, "content") as string | undefined) || "";
+      },
+    },
+  };
+}
+
+const REVIEW_WORD_MD = [
+  "# Knowledge",
+  "",
+  "## 一、英文词汇",
+  "",
+  "| 单词 | 释义 |",
+  "|:----:|------|",
+  "| alpha | 第一 |",
+  "| beta  | 第二 |",
+  "",
+].join("\n");
+
+const REVIEW_MATH_MD = [
+  "# Math",
+  "",
+  "## 二、数学知识点",
+  "",
+  "### 1.1 极限",
+  "",
+  "极限描述趋近行为。",
+  "",
+].join("\n");
+
+const REVIEW_SUBJECT_MD = [
+  "# Physics",
+  "",
+  "## 物理",
+  "",
+  "### 1.1 牛顿第一定律",
+  "",
+  "保持匀速直线运动。",
+  "",
+].join("\n");
+
+function makeContentStore(entries: Array<{ path: string; content: string }>): Map<string, FakeReviewFile | FakeReviewFolder> {
+  const map = new Map<string, FakeReviewFile | FakeReviewFolder>();
+  for (const entry of entries) {
+    map.set(entry.path, {
+      path: entry.path,
+      mtime: 1,
+      size: entry.content.length,
+      content: entry.content,
+    } as unknown as FakeReviewFile);
+  }
+  return map;
+}
+
+describe("KnowledgeService - discoverReviewSourceFiles", () => {
+  it("expands a folder recursively and de-duplicates overlapping sources", () => {
+    const folder: FakeReviewFolder = {
+      path: "notes",
+      children: [
+        { path: "notes/words.md", mtime: 1, size: 1 },
+        {
+          path: "notes/sub",
+          children: [{ path: "notes/sub/math.md", mtime: 2, size: 2 }],
+        },
+        { path: "notes/skip.txt", mtime: 3, size: 3 },
+      ],
+    };
+    const app: FakeReviewApp = {
+      vault: {
+        getAbstractFileByPath: (path) => (path === "notes" ? folder : null),
+        read: async () => "",
+      },
+    };
+    const out = discoverReviewSourceFiles(app as never, [
+      { type: "folder", path: "notes" },
+      { type: "folder", path: "notes" },
+    ]);
+    expect(out.files.map((f) => f.path).sort()).toEqual(["notes/sub/math.md", "notes/words.md"]);
+    expect(out.warnings).toEqual([]);
+    expect(out.signature).toContain("folder:notes");
+  });
+
+  it("returns warnings for missing or invalid sources without aborting the others", () => {
+    const app: FakeReviewApp = {
+      vault: {
+        getAbstractFileByPath: (path) => (path === "exists.md"
+          ? { path: "exists.md", mtime: 1, size: 1 }
+          : null),
+        read: async () => "",
+      },
+    };
+    const out = discoverReviewSourceFiles(app as never, [
+      { type: "file", path: "exists.md" },
+      { type: "file", path: "missing.md" },
+      { type: "folder", path: "no-folder" },
+      { type: "unknown", path: "x" } as unknown as { type: "file"; path: string },
+    ]);
+    expect(out.files.map((f) => f.path)).toEqual(["exists.md"]);
+    expect(out.warnings.length).toBe(3);
+    expect(out.warnings.some((w) => w.path === "missing.md" && /不存在/.test(w.message))).toBe(true);
+    expect(out.warnings.some((w) => w.path === "no-folder" && /不存在|目录/.test(w.message))).toBe(true);
+    expect(out.warnings.some((w) => w.path === "" && /无效/.test(w.message))).toBe(true);
+  });
+});
+
+describe("KnowledgeService - loadReviewKnowledgeSources", () => {
+  function makeAppWithContent(): FakeReviewApp {
+    const store = new Map<string, FakeReviewFile | FakeReviewFolder>();
+    store.set("notes/words.md", { path: "notes/words.md", mtime: 1, size: REVIEW_WORD_MD.length });
+    store.set("notes/math.md", { path: "notes/math.md", mtime: 2, size: REVIEW_MATH_MD.length });
+    store.set("notes/sub/physics.md", { path: "notes/sub/physics.md", mtime: 3, size: REVIEW_SUBJECT_MD.length });
+    return {
+      vault: {
+        getAbstractFileByPath: (path) => store.get(path) ?? null,
+        read: async (file) => {
+          const map: Record<string, string> = {
+            "notes/words.md": REVIEW_WORD_MD,
+            "notes/math.md": REVIEW_MATH_MD,
+            "notes/sub/physics.md": REVIEW_SUBJECT_MD,
+          };
+          if (!map[file.path]) throw new Error(`unknown: ${file.path}`);
+          return map[file.path] ?? "";
+        },
+      },
+    };
+  }
+
+  it("aggregates entries from multiple files with stable, file-prefixed ids", async () => {
+    const folder: FakeReviewFolder = {
+      path: "notes",
+      children: [
+        { path: "notes/words.md", mtime: 1, size: 1 },
+        { path: "notes/math.md", mtime: 2, size: 1 },
+        {
+          path: "notes/sub",
+          children: [{ path: "notes/sub/physics.md", mtime: 3, size: 1 }],
+        },
+      ],
+    };
+    const app: FakeReviewApp = {
+      vault: {
+        getAbstractFileByPath: (path) => (path === "notes" ? folder : null),
+        read: async (file) => {
+          const map: Record<string, string> = {
+            "notes/words.md": REVIEW_WORD_MD,
+            "notes/math.md": REVIEW_MATH_MD,
+            "notes/sub/physics.md": REVIEW_SUBJECT_MD,
+          };
+          return map[file.path] ?? "";
+        },
+      },
+    };
+    const data = await loadReviewKnowledgeSources(app as never, [
+      { type: "folder", path: "notes" },
+    ]);
+    expect(data.words.length).toBe(2);
+    expect(data.maths.length).toBe(1);
+    expect(data.subjects.length).toBe(1);
+    // Every entry must carry a per-file source path and a globally unique id.
+    const allIds = [
+      ...data.words.map((e) => e.id),
+      ...data.maths.map((e) => e.id),
+      ...data.subjects.map((e) => e.id),
+    ];
+    expect(new Set(allIds).size).toBe(allIds.length);
+    expect(allIds.some((id) => id.includes("notes/words.md"))).toBe(true);
+    expect(allIds.some((id) => id.includes("notes/math.md"))).toBe(true);
+    // Different files must NOT collide even when they both have w01 / m01.
+    expect(data.words.find((w) => w.name === "alpha")?.id.startsWith("notes/words.md#")).toBe(true);
+  });
+
+  it("keeps successful sources and surfaces read failures as warnings", async () => {
+    const store = makeContentStore([
+      { path: "good.md", content: REVIEW_WORD_MD },
+      { path: "bad.md", content: REVIEW_WORD_MD },
+    ]);
+    const app: FakeReviewApp = {
+      vault: {
+        getAbstractFileByPath: (path) => store.get(path) ?? null,
+        read: async (file) => {
+          if (file.path === "bad.md") throw new Error("mock boom");
+          const node = store.get(file.path) as (FakeReviewFile & { content: string });
+          return node.content;
+        },
+      },
+    };
+    const data = await loadReviewKnowledgeSources(app as never, [
+      { type: "file", path: "good.md" },
+      { type: "file", path: "bad.md" },
+    ]);
+    expect(data.words.length).toBe(2);
+    expect(data.warnings.length).toBe(1);
+    expect(data.warnings[0]?.path).toBe("bad.md");
+    expect(data.warnings[0]?.message).toMatch(/读取失败/);
+  });
+
+  it("produces a signature that changes when a file's mtime or size changes", () => {
+    const app: FakeReviewApp = {
+      vault: {
+        getAbstractFileByPath: (path) => path === "x.md"
+          ? { path: "x.md", mtime: 100, size: 50 }
+          : null,
+        read: async () => "",
+      },
+    };
+    const a = discoverReviewSourceFiles(app as never, [
+      { type: "file", path: "x.md" },
+    ]);
+    const app2: FakeReviewApp = {
+      vault: {
+        getAbstractFileByPath: (path) => path === "x.md"
+          ? { path: "x.md", mtime: 200, size: 50 }
+          : null,
+        read: async () => "",
+      },
+    };
+    const b = discoverReviewSourceFiles(app2 as never, [
+      { type: "file", path: "x.md" },
+    ]);
+    expect(a.signature).not.toBe(b.signature);
   });
 });

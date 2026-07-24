@@ -13,6 +13,12 @@ export interface SettingsStrings {
   pathSection: string;
   knowledgeFileName: string;
   knowledgeFileDesc: string;
+  reviewSourcesName: string;
+  reviewSourcesDesc: string;
+  reviewSourceTypeFile: string;
+  reviewSourceTypeFolder: string;
+  reviewSourceAdd: string;
+  reviewSourceRemove: string;
   newsFolderName: string;
   newsFolderDesc: string;
   serviceSection: string;
@@ -58,7 +64,14 @@ const en: SettingsStrings = {
   pathSection: "Vault paths",
   knowledgeFileName: "Knowledge file",
   knowledgeFileDesc:
-    "Vault-relative path used by the Learning and Review widgets (e.g. plans/知识点.md).",
+    "Vault-relative file used as the write target for Learning and Inquiry. Review falls back to it when no read-only sources are configured.",
+  reviewSourcesName: "Review sources",
+  reviewSourcesDesc:
+    "Read-only Markdown files or folders for the Review widget. Folders are scanned recursively for Markdown files. Leave empty to fall back to the Knowledge file above.",
+  reviewSourceTypeFile: "Markdown file",
+  reviewSourceTypeFolder: "Folder",
+  reviewSourceAdd: "Add source",
+  reviewSourceRemove: "Remove",
   newsFolderName: "News folder",
   newsFolderDesc:
     "Folder used by the News widget. Files outside this folder with the #news tag are also picked up.",
@@ -120,7 +133,14 @@ const zh: SettingsStrings = {
   pathSection: "库内路径",
   knowledgeFileName: "知识点文件",
   knowledgeFileDesc:
-    "学习与复习模块所使用的库内相对路径(例如 plans/知识点.md)。",
+    "学习与探究模块写入的库内相对文件路径。未配置复习只读来源时,复习模块也会回退使用此文件。",
+  reviewSourcesName: "复习来源",
+  reviewSourcesDesc:
+    "复习模块只读读取的 Markdown 文件或目录。目录会递归扫描 Markdown 文件。留空时回退使用上面的知识点文件。",
+  reviewSourceTypeFile: "Markdown 文件",
+  reviewSourceTypeFolder: "目录",
+  reviewSourceAdd: "添加来源",
+  reviewSourceRemove: "删除",
   newsFolderName: "新闻文件夹",
   newsFolderDesc:
     "新闻模块扫描的文件夹。带有 #news 标签的其他位置文件也会一并被列出。",

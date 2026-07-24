@@ -1,4 +1,4 @@
-import type { App } from "obsidian";
+import type { App, TFile } from "obsidian";
 
 export type KnowledgeCategory = "word" | "math" | "subject" | "misc";
 
@@ -845,6 +845,274 @@ export interface KnowledgeData {
   subjects: SubjectKnowledge[];
 }
 
+export interface KnowledgeReviewSource {
+  type: "file" | "folder";
+  path: string;
+}
+
+export interface ReviewSourceFile {
+  path: string;
+  mtime: number;
+  size: number;
+}
+
+export interface ReviewSourceWarning {
+  path: string;
+  message: string;
+}
+
+export interface ReviewEntrySource {
+  sourcePath: string;
+  sourceName: string;
+}
+
+export type ReviewWordKnowledge = WordKnowledge & ReviewEntrySource;
+export type ReviewMathKnowledge = MathKnowledge & ReviewEntrySource;
+export type ReviewSubjectKnowledge = SubjectKnowledge & ReviewEntrySource;
+
+export interface ReviewKnowledgeData extends KnowledgeData {
+  words: ReviewWordKnowledge[];
+  maths: ReviewMathKnowledge[];
+  subjects: ReviewSubjectKnowledge[];
+  sourceFiles: ReviewSourceFile[];
+  warnings: ReviewSourceWarning[];
+  signature: string;
+}
+
+export interface ReviewSourceDiscovery {
+  files: ReviewSourceFile[];
+  warnings: ReviewSourceWarning[];
+  signature: string;
+}
+
+interface ReviewVaultFile {
+  path: string;
+  basename?: string;
+  extension?: string;
+  mtime?: number;
+  size?: number;
+  stat?: { mtime?: number; size?: number };
+}
+
+interface ReviewVaultFolder {
+  path: string;
+  children: unknown[];
+}
+
+function reviewObject(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
+}
+
+function isReviewFolder(value: unknown): value is ReviewVaultFolder {
+  const obj = reviewObject(value);
+  return typeof obj?.path === "string" && Array.isArray(obj.children);
+}
+
+function toReviewMarkdownFile(value: unknown): ReviewVaultFile | null {
+  const obj = reviewObject(value);
+  if (!obj || typeof obj.path !== "string" || Array.isArray(obj.children)) return null;
+  const path = obj.path;
+  const extension = typeof obj.extension === "string"
+    ? obj.extension
+    : (path.split(".").pop() ?? "");
+  if (extension.toLowerCase() !== "md") return null;
+  return {
+    path,
+    basename: typeof obj.basename === "string" ? obj.basename : undefined,
+    extension: typeof obj.extension === "string" ? obj.extension : undefined,
+    mtime: typeof obj.mtime === "number" ? obj.mtime : undefined,
+    size: typeof obj.size === "number" ? obj.size : undefined,
+    stat: obj.stat && typeof obj.stat === "object"
+      ? {
+          mtime: typeof (obj.stat as Record<string, unknown>).mtime === "number"
+            ? (obj.stat as Record<string, unknown>).mtime as number
+            : undefined,
+          size: typeof (obj.stat as Record<string, unknown>).size === "number"
+            ? (obj.stat as Record<string, unknown>).size as number
+            : undefined,
+        }
+      : undefined,
+  };
+}
+
+function reviewFileStats(file: ReviewVaultFile): ReviewSourceFile {
+  return {
+    path: file.path,
+    mtime: typeof file.stat?.mtime === "number"
+      ? file.stat.mtime
+      : (file.mtime ?? 0),
+    size: typeof file.stat?.size === "number"
+      ? file.stat.size
+      : (file.size ?? 0),
+  };
+}
+
+function reviewSourceName(path: string): string {
+  return path.split("/").pop() ?? path;
+}
+
+function normalizeKnowledgeReviewSource(raw: unknown): KnowledgeReviewSource | null {
+  const obj = reviewObject(raw);
+  if (obj?.type !== "file" && obj?.type !== "folder") return null;
+  if (typeof obj.path !== "string") return null;
+  const path = obj.path.trim().replace(/^\/+/, "").replace(/\/+$/, "");
+  return path ? { type: obj.type, path } : null;
+}
+
+function reviewEntryId(sourcePath: string, localId: string): string {
+  return `${sourcePath}#${localId}`;
+}
+
+/** Discover Markdown files for configured file and folder sources. */
+export function discoverReviewSourceFiles(
+  app: App,
+  sources: readonly KnowledgeReviewSource[],
+): ReviewSourceDiscovery {
+  const warnings: ReviewSourceWarning[] = [];
+  const normalizedSources: KnowledgeReviewSource[] = [];
+  const seenSources = new Set<string>();
+  for (const raw of Array.isArray(sources) ? sources : []) {
+    const source = normalizeKnowledgeReviewSource(raw);
+    if (!source) {
+      warnings.push({ path: "", message: "复习来源配置无效" });
+      continue;
+    }
+    const key = `${source.type}:${source.path}`;
+    if (seenSources.has(key)) continue;
+    seenSources.add(key);
+    normalizedSources.push(source);
+  }
+
+  const vault = app.vault as unknown as {
+    getAbstractFileByPath?: (path: string) => unknown;
+  };
+  const getAbstractFileByPath = vault.getAbstractFileByPath;
+  if (typeof getAbstractFileByPath !== "function") {
+    for (const source of normalizedSources) {
+      warnings.push({ path: source.path, message: "Vault 不支持读取来源" });
+    }
+    return { files: [], warnings, signature: sourceSignature(normalizedSources, []) };
+  }
+
+  const filesByPath = new Map<string, ReviewSourceFile>();
+  const addFile = (value: unknown): number => {
+    const file = toReviewMarkdownFile(value);
+    if (!file) return 0;
+    if (!filesByPath.has(file.path)) filesByPath.set(file.path, reviewFileStats(file));
+    return 1;
+  };
+  const walk = (value: unknown): number => {
+    const fileCount = addFile(value);
+    if (fileCount > 0) return fileCount;
+    if (!isReviewFolder(value)) return 0;
+    let count = 0;
+    for (const child of value.children) count += walk(child);
+    return count;
+  };
+
+  for (const source of normalizedSources) {
+    const node = getAbstractFileByPath.call(vault, source.path);
+    if (!node) {
+      warnings.push({ path: source.path, message: "来源不存在" });
+      continue;
+    }
+    if (source.type === "file") {
+      if (addFile(node) === 0) {
+        warnings.push({ path: source.path, message: "来源不是 Markdown 文件" });
+      }
+      continue;
+    }
+    if (!isReviewFolder(node)) {
+      warnings.push({ path: source.path, message: "来源不是目录" });
+      continue;
+    }
+    if (walk(node) === 0) {
+      warnings.push({ path: source.path, message: "目录中没有 Markdown 文件" });
+    }
+  }
+
+  const files = [...filesByPath.values()].sort((a, b) => a.path.localeCompare(b.path));
+  return {
+    files,
+    warnings,
+    signature: sourceSignature(normalizedSources, files),
+  };
+}
+
+function sourceSignature(
+  sources: readonly KnowledgeReviewSource[],
+  files: readonly ReviewSourceFile[],
+): string {
+  const sourcePart = sources.map((source) => `${source.type}:${source.path}`).join("|");
+  const filePart = files.map((file) => `${file.path}:${file.mtime}:${file.size}`).join("|");
+  return `${sourcePart}||${filePart}`;
+}
+
+async function readReviewVaultFile(app: App, file: ReviewSourceFile): Promise<string> {
+  const vault = app.vault as unknown as {
+    read?: (file: unknown) => Promise<string>;
+    adapter?: { read?: (path: string) => Promise<string> };
+  };
+  if (typeof vault.read === "function") {
+    return vault.read({ path: file.path } as TFile);
+  }
+  if (typeof vault.adapter?.read === "function") {
+    return vault.adapter.read(file.path);
+  }
+  throw new Error("Vault read API unavailable");
+}
+
+/** Read and aggregate all configured Markdown sources for the Review widget. */
+export async function loadReviewKnowledgeSources(
+  app: App,
+  sources: readonly KnowledgeReviewSource[],
+): Promise<ReviewKnowledgeData> {
+  const discovery = discoverReviewSourceFiles(app, sources);
+  const result: ReviewKnowledgeData = {
+    words: [],
+    maths: [],
+    subjects: [],
+    sourceFiles: discovery.files,
+    warnings: [...discovery.warnings],
+    signature: discovery.signature,
+  };
+
+  for (const file of discovery.files) {
+    try {
+      const parsed = parseKnowledgeMd(await readReviewVaultFile(app, file));
+      const sourceName = reviewSourceName(file.path);
+      result.words.push(
+        ...parsed.words.map((entry) => ({
+          ...entry,
+          id: reviewEntryId(file.path, entry.id),
+          sourcePath: file.path,
+          sourceName,
+        })),
+      );
+      result.maths.push(
+        ...parsed.maths.map((entry) => ({
+          ...entry,
+          id: reviewEntryId(file.path, entry.id),
+          sourcePath: file.path,
+          sourceName,
+        })),
+      );
+      result.subjects.push(
+        ...parsed.subjects.map((entry) => ({
+          ...entry,
+          id: reviewEntryId(file.path, entry.id),
+          sourcePath: file.path,
+          sourceName,
+        })),
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      result.warnings.push({ path: file.path, message: `读取失败: ${message}` });
+    }
+  }
+  return result;
+}
+
 export class KnowledgeService {
   private readonly app: App;
   private readonly path: string;
@@ -879,6 +1147,12 @@ export class KnowledgeService {
     if (force) this.cached = null;
     const text = await this.readFile();
     return parseKnowledgeMd(text);
+  }
+
+  async loadReviewKnowledgeSources(
+    sources: readonly KnowledgeReviewSource[],
+  ): Promise<ReviewKnowledgeData> {
+    return loadReviewKnowledgeSources(this.app, sources);
   }
 
   /** Legacy 3-arg append kept for backward compatibility. */

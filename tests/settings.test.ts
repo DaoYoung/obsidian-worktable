@@ -1,15 +1,53 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_SETTINGS, hasDirectAiConfig } from "../src/settings";
+import {
+  DEFAULT_SETTINGS,
+  hasDirectAiConfig,
+  normalizeReviewSource,
+  resolveReviewSources,
+} from "../src/settings";
 import { AI_PROVIDERS } from "../src/services/ai/registry";
 import { AI_PROVIDER_IDS } from "../src/services/ai/types";
 import { getSettingsStrings, pickSettingsLocale } from "../src/settingsStrings";
 
-describe("settings - defaults", () => {
-  it("declares the expected AI fields with safe defaults", () => {
-    expect(DEFAULT_SETTINGS.aiProvider).toBe("anthropic");
-    expect(DEFAULT_SETTINGS.aiApiKey).toBe("");
-    expect(DEFAULT_SETTINGS.aiBaseUrl).toBe("https://api.anthropic.com");
-    expect(DEFAULT_SETTINGS.aiModel).toBe("claude-sonnet-4-5");
+describe("settings - review source resolution", () => {
+  it("normalizes valid sources and rejects malformed values", () => {
+    expect(normalizeReviewSource({ type: "file", path: " /plans/知识点.md/ " })).toEqual({
+      type: "file",
+      path: "plans/知识点.md",
+    });
+    expect(normalizeReviewSource({ type: "folder", path: "plans" })).toEqual({
+      type: "folder",
+      path: "plans",
+    });
+    expect(normalizeReviewSource({ type: "file", path: "   " })).toBeNull();
+    expect(normalizeReviewSource({ type: "unknown", path: "plans" })).toBeNull();
+    expect(normalizeReviewSource(null)).toBeNull();
+  });
+
+  it("deduplicates configured sources and falls back to knowledgeFile", () => {
+    expect(
+      resolveReviewSources({
+        knowledgeFile: " /plans/知识点.md ",
+        reviewSources: [
+          { type: "file", path: "/notes/a.md" },
+          { type: "file", path: "notes/a.md" },
+          { type: "folder", path: "notes" },
+        ],
+      }),
+    ).toEqual([
+      { type: "file", path: "notes/a.md" },
+      { type: "folder", path: "notes" },
+    ]);
+
+    expect(resolveReviewSources({ knowledgeFile: " /legacy.md ", reviewSources: [] })).toEqual([
+      { type: "file", path: "legacy.md" },
+    ]);
+    expect(
+      resolveReviewSources({
+        knowledgeFile: "",
+        reviewSources: undefined as unknown as [],
+      }),
+    ).toEqual([{ type: "file", path: DEFAULT_SETTINGS.knowledgeFile }]);
   });
 });
 

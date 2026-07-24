@@ -9,6 +9,7 @@ interface ActiveRecallSettings {
 }
 
 const KNOWLEDGE_CACHE_KEY = "home-knowledge-cache-v1";
+const REVIEW_SOURCES_CACHE_KEY = "home-review-sources-v1";
 
 export function mountActiveRecallWidget(containerEl: HTMLElement, context: WidgetContext): void {
   const { app, component } = context;
@@ -208,6 +209,7 @@ export function mountActiveRecallWidget(containerEl: HTMLElement, context: Widge
         await knowledge.append("misc", name, entry.markdown);
       }
       localStorage.removeItem(KNOWLEDGE_CACHE_KEY);
+      localStorage.removeItem(REVIEW_SOURCES_CACHE_KEY);
       if (disposed) return;
       conceptStatus.className = "kp-status ok";
       conceptStatus.empty();

@@ -4,6 +4,7 @@ import type { WorktableSettings } from "../src/settings";
 
 const baseSettings: WorktableSettings = {
   knowledgeFile: "plans/知识点.md",
+  reviewSources: [],
   newsFolder: "news",
   serviceBaseUrl: "http://127.0.0.1:8765",
   openOnStartup: true,

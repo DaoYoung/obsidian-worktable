@@ -35,6 +35,7 @@ interface InquirySettings {
 }
 
 const KNOWLEDGE_CACHE_KEY = "home-knowledge-cache-v1";
+const REVIEW_SOURCES_CACHE_KEY = "home-review-sources-v1";
 const FLOWER_KEY = "home-learning-flowers";
 
 export function mountInquiryLearningWidget(containerEl: HTMLElement, context: WidgetContext): void {
@@ -658,6 +659,7 @@ export function mountInquiryLearningWidget(containerEl: HTMLElement, context: Wi
       const source = state.url ? `**来源：** [${state.url}](${state.url})\n\n` : "";
       await knowledge.append("misc", name, `${source}${points.map((point) => `- ${point}`).join("\n")}\n`);
       localStorage.removeItem(KNOWLEDGE_CACHE_KEY);
+      localStorage.removeItem(REVIEW_SOURCES_CACHE_KEY);
       if (disposed) return;
       keyPointStatus.className = "kp-status ok";
       keyPointStatus.empty();

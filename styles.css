@@ -1,6 +1,6 @@
 /* ===========================================================================
    Obsidian Worktable — Built Styles
-   Generated: 2026-07-23T09-18-46
+   Generated: 2026-07-24T07-10-50
    Sources:
  *  - src/styles/base.css
  *  - src/styles/productivity.css
@@ -114,6 +114,41 @@
   font-size: 0.8rem;
   color: var(--text-muted);
   margin-top: 2px;
+}
+
+.worktable-review-sources {
+  margin: -8px 0 16px;
+}
+
+.worktable-review-sources .setting-item {
+  border-top: 1px solid var(--background-modifier-border);
+  padding: 8px 0;
+}
+
+.worktable-review-sources .setting-item-control {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.worktable-review-sources input[type="text"] {
+  min-width: 12rem;
+  flex: 1 1 14rem;
+}
+
+@media (max-width: 600px) {
+  .worktable-review-sources .setting-item-info {
+    flex: 1 1 100%;
+  }
+
+  .worktable-review-sources .setting-item-control {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .worktable-review-sources input[type="text"] {
+    min-width: 0;
+    flex-basis: 10rem;
+  }
 }
 
 /* Service status */
@@ -692,16 +727,14 @@
   font-weight: 600;
 }
 
-.worktable .pomo-link-btn {
-  background: none;
-  border: none;
-  color: var(--text-faint, #999);
-  cursor: pointer;
-  font-size: 11px;
-  text-transform: none;
-  letter-spacing: 0;
-  padding: 2px 6px;
+.worktable .pomo-history h4 > span {
+  flex: 1 1 auto;
 }
+
+.worktable .pomo-history h4 > .pomo-link-btn + .pomo-link-btn {
+  margin-left: 2px;
+}
+
 
 .worktable .pomo-link-btn:hover {
   color: var(--accent);
@@ -2293,6 +2326,82 @@
 
 .worktable .home-review-foot-actions button:hover {
   background: var(--background-modifier-hover, #ececec);
+}
+
+.worktable .home-review-source {
+  font-size: 11px;
+  color: var(--text-muted, #666);
+  margin-bottom: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.worktable .home-review-source .src-label {
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.worktable .home-review-source .src-links {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  color: var(--text-normal, #1a1a1a);
+}
+
+.worktable .home-review-source a {
+  color: #3498db;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.worktable .home-review-source a:hover {
+  text-decoration: underline;
+}
+
+.worktable .home-review-warnings {
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(243, 156, 18, 0.1);
+  border: 1px solid rgba(243, 156, 18, 0.45);
+  font-size: 12px;
+  color: var(--text-muted, #666);
+  line-height: 1.5;
+}
+
+.worktable .home-review-warnings[hidden] { display: none; }
+
+.worktable .home-review-warnings ul {
+  list-style: disc;
+  padding-left: 18px;
+  margin: 4px 0 0;
+}
+
+.worktable .home-review-warnings-h {
+  font-weight: 600;
+  color: #b7791f;
+  margin-bottom: 4px;
+}
+
+.worktable .home-review-source-card {
+  font-size: 11px;
+  color: var(--text-muted, #666);
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.worktable .home-review-source-card a {
+  color: #3498db;
+  text-decoration: none;
+}
+
+.worktable .home-review-source-card a:hover {
+  text-decoration: underline;
 }
 
 /* Onboarding banner shown at the top of the Learning widget so users
