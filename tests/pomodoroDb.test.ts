@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { findDuplicateIds, computeStats, type PomSession } from "../src/storage/pomodoroDb";
+import { findDuplicateIds, computeStats, localDateKey, type PomSession } from "../src/storage/pomodoroDb";
 
 function rec(id: number, type: string, duration: number, completedAt: number): PomSession {
   return {
@@ -22,7 +22,7 @@ function rec(id: number, type: string, duration: number, completedAt: number): P
     duration,
     startedAt: completedAt - duration,
     completedAt,
-    date: new Date(completedAt).toISOString().slice(0, 10),
+    date: localDateKey(completedAt),
   };
 }
 
@@ -32,7 +32,8 @@ function datedRec(
   duration: number,
   date: string,
 ): PomSession {
-  return { id, type, duration, startedAt: 0, completedAt: 0, date };
+  const completedAt = new Date(`${date}T12:00:00`).getTime();
+  return { id, type, duration, startedAt: completedAt - duration, completedAt, date };
 }
 
 describe("findDuplicateIds", () => {
@@ -231,20 +232,39 @@ describe("computeStats (excluding today from averages)", () => {
     expect(stats.activeDays).toBe(0);
   });
 
-  it("returns empty stats for an empty record set", () => {
-    const stats = computeStats([], TODAY);
-    expect(stats.todayCount).toBe(0);
+  it("uses completedAt local date even when stored date is an old UTC date", () => {
+    const completedAt = new Date(2026, 6, 24, 5, 23).getTime();
+    const records: PomSession[] = [
+      {
+        id: 1,
+        type: "work",
+        duration: 1500,
+        startedAt: completedAt - 1500,
+        completedAt,
+        date: "2026-07-23",
+      },
+    ];
+    const stats = computeStats(records, localDateKey(completedAt));
+    expect(stats.todayCount).toBe(1);
     expect(stats.focusCount).toBe(0);
     expect(stats.activeDays).toBe(0);
   });
 
+  it("formats local dates across midnight without using UTC", () => {
+    const beforeMidnight = new Date(2026, 6, 23, 23, 59, 59).getTime();
+    const afterMidnight = new Date(2026, 6, 24, 0, 0, 1).getTime();
+    expect(localDateKey(beforeMidnight)).toBe("2026-07-23");
+    expect(localDateKey(afterMidnight)).toBe("2026-07-24");
+  });
+
   it("ignores records with no date field when computing active days", () => {
+    const yesterdayAtNoon = new Date(`${YESTERDAY}T12:00:00`).getTime();
     const records: PomSession[] = [
-      { id: 1, type: "work", duration: 1500, startedAt: 0, completedAt: 0, date: YESTERDAY },
-      { id: 2, type: "work", duration: 1500, startedAt: 0, completedAt: 0, date: "" }, // missing
+      { id: 1, type: "work", duration: 1500, startedAt: yesterdayAtNoon - 1500, completedAt: yesterdayAtNoon, date: YESTERDAY },
+      { id: 2, type: "work", duration: 1500, startedAt: yesterdayAtNoon - 1500, completedAt: yesterdayAtNoon, date: "" }, // missing stored date
     ];
     const stats = computeStats(records, TODAY);
     expect(stats.focusCount).toBe(2);
-    expect(stats.activeDays).toBe(1); // empty-date record does not contribute a day
+    expect(stats.activeDays).toBe(1); // active day comes from completedAt
   });
 });

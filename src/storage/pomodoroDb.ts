@@ -31,6 +31,14 @@ export interface PomStats {
   activeDays: number;
 }
 
+export function localDateKey(ms: number): string {
+  const date = new Date(ms);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 /**
  * Pure helper — exported for unit testing.
  * Reduces a list of session records + today's date key into PomStats.
@@ -51,7 +59,8 @@ export function computeStats(records: PomSession[], today: string): PomStats {
   let breakTotalSec = 0;
   const pastDates = new Set<string>();
   for (const r of records) {
-    const isToday = r.date === today;
+    const date = localDateKey(r.completedAt);
+    const isToday = date === today;
     if (isToday) {
       if (r.type === "work") {
         todayCount += 1;
@@ -66,7 +75,7 @@ export function computeStats(records: PomSession[], today: string): PomStats {
       } else if (r.type === "short" || r.type === "long") {
         breakTotalSec += r.duration || 0;
       }
-      if (r.date) pastDates.add(r.date);
+      if (date) pastDates.add(date);
     }
   }
   return {
@@ -256,7 +265,7 @@ export function createPomDb(): PomDb {
       const req = tx.objectStore("sessions").getAll();
       req.onsuccess = () => {
         const all = req.result || [];
-        const today = new Date().toISOString().slice(0, 10);
+        const today = localDateKey(Date.now());
         resolve(computeStats(all, today));
       };
       req.onerror = () => reject(req.error);

@@ -1,5 +1,5 @@
 import type { WidgetContext } from "../types";
-import type { PomDb } from "../storage/pomodoroDb";
+import { localDateKey, type PomDb } from "../storage/pomodoroDb";
 import { clearChildren, el } from "../utils/dom";
 
 const STORAGE_KEY = "pomo-state-v1";
@@ -663,7 +663,7 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
     const wasRunning = state.endsAt != null;
     const completedAt = Date.now();
     const startedAt = state._currentStart || completedAt - state.durationMin * 60 * 1000;
-    const dateKey = new Date(completedAt).toISOString().slice(0, 10);
+    const dateKey = localDateKey(completedAt);
 
     if (dbReady && db) {
       try {
@@ -799,7 +799,7 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
           const c = new Date(r.completedAt);
           const s = new Date(r.startedAt);
           return [
-            r.date,
+            localDateKey(r.completedAt),
             `${String(c.getHours()).padStart(2, "0")}:${String(c.getMinutes()).padStart(2, "0")}`,
             r.type,
             Math.round((r.duration || 0) / 60),
@@ -813,7 +813,7 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `pomodoro-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.download = `pomodoro-${localDateKey(Date.now())}.csv`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
