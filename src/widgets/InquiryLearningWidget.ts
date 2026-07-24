@@ -35,7 +35,7 @@ interface InquirySettings {
 }
 
 const KNOWLEDGE_CACHE_KEY = "home-knowledge-cache-v1";
-const REVIEW_SOURCES_CACHE_KEY = "home-review-sources-v1";
+const REVIEW_SOURCES_CACHE_KEY = "home-review-sources-v2";
 const FLOWER_KEY = "home-learning-flowers";
 
 export function mountInquiryLearningWidget(containerEl: HTMLElement, context: WidgetContext): void {

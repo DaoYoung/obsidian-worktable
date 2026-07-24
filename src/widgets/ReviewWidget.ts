@@ -56,7 +56,10 @@ interface CachedReviewSources {
 
 const HISTORY_KEY = "home-review-history-v1";
 const TODAY_KEY = "home-review-today-v1";
-const CACHE_KEY = "home-review-sources-v1";
+// v2 invalidates v1 cache entries that predate the adapter.read fix. The
+// historical warnings embedded in v1 are not from the current code path
+// and should not survive a reload.
+const CACHE_KEY = "home-review-sources-v2";
 const CACHE_TTL = 60 * 60 * 1_000;
 const RECENT_PER_DISCIPLINE = 10;
 const HISTORY_MAX = 60;

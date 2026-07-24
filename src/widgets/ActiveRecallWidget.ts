@@ -9,7 +9,7 @@ interface ActiveRecallSettings {
 }
 
 const KNOWLEDGE_CACHE_KEY = "home-knowledge-cache-v1";
-const REVIEW_SOURCES_CACHE_KEY = "home-review-sources-v1";
+const REVIEW_SOURCES_CACHE_KEY = "home-review-sources-v2";
 
 export function mountActiveRecallWidget(containerEl: HTMLElement, context: WidgetContext): void {
   const { app, component } = context;
