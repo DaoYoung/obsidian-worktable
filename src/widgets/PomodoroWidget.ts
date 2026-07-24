@@ -6,6 +6,16 @@ const STORAGE_KEY = "pomo-state-v1";
 /** Fetch & render the most recent 20 records; CSS shows ~6 by default with overflow scrolling. */
 const RECENT_HISTORY_LIMIT = 20;
 const RING_CIRCUMFERENCE = 2 * Math.PI * 100; // 628.3185
+/**
+ * Wall-clock gap between consecutive ticks that we treat as a system
+ * suspend (laptop sleep / OS hibernate / aggressive browser background
+ * throttling). The tick interval is 1s; anything ≫ that strongly implies
+ * the clock was paused. Threshold must stay safely above the 1s tick
+ * interval to avoid false positives from event-loop backlog.
+ */
+const SLEEP_DETECTION_MS = 5_000;
+/** Coarser interval for the day-rollover sweep that runs while idle. */
+const DAY_CHECK_INTERVAL_MS = 60_000;
 
 interface PomState {
   mode: "work" | "short" | "long" | "custom";
@@ -148,6 +158,13 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
 
   const state = loadState();
   let ticker: number | null = null;
+  /**
+   * Wall-clock ms of the previous completed tick, for sleep/wake
+   * detection. Initialized in startTicker(); null while the timer is
+   * not running so the first tick after Start isn't misread as a
+   * long stall.
+   */
+  let lastTickAt: number | null = null;
   let db: PomDb | null = pomDb ?? null;
   let dbReady = false;
   let _finishing = false;
@@ -525,11 +542,30 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
       stopTicker();
       return;
     }
+    const now = Date.now();
+    // Sleep / suspend detection. If Date.now() jumped much more than the
+    // 1s tick interval since the last tick, the system was almost certainly
+    // asleep (laptop sleep, OS hibernate, aggressive browser background
+    // throttling). Pause instead of letting the expiry check below call
+    // finish() and record a phantom session for time the user was asleep.
+    if (lastTickAt != null && now - lastTickAt >= SLEEP_DETECTION_MS) {
+      lastTickAt = now;
+      pause();
+      return;
+    }
+    lastTickAt = now;
+    // Day-rollover while the view is already open. Refresh today's counter
+    // so the widget reflects the new day without forcing a remount, and
+    // re-surface the stale banner if a paused timer from yesterday is still
+    // around. Cheap — only acts on actual rollover.
+    if (state.todayDone.date !== new Date(now).toDateString()) {
+      checkDayRollover();
+    }
     if (state.endsAt == null) {
       state.running = false;
       return;
     }
-    const remaining = Math.max(0, Math.round((state.endsAt - Date.now()) / 1000));
+    const remaining = Math.max(0, Math.round((state.endsAt - now) / 1000));
     if (remaining <= 0) {
       void finish();
       return;
@@ -538,8 +574,28 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
     saveState(state);
   }
 
+  function checkDayRollover(): void {
+    const today = new Date().toDateString();
+    if (state.todayDone.date === today) return;
+    // Mirror loadState's day-rollover behavior: zero today's counter and
+    // forget yesterday's stale-prompt decision so a leftover pausedRemain
+    // can re-prompt on the new day.
+    state.todayDone = { date: today, count: 0 };
+    state.stalePromptDate = "";
+    saveState(state);
+    if (!wrap.isConnected) return;
+    void refreshHistory();
+    if (state.pausedRemain != null) {
+      staleText.textContent = `检测到昨天还剩 ${fmt(state.pausedRemain)} 的计时器,要重置还是继续?`;
+      staleBanner.removeAttribute("hidden");
+    }
+  }
+
   function startTicker(): void {
     if (ticker === null) {
+      // Seed lastTickAt so the first tick isn't mistaken for a long
+      // stall (sleep detection threshold is 5s; we want gap ≈ 1s here).
+      lastTickAt = Date.now();
       ticker = window.setInterval(tick, 1000);
       component.registerInterval(ticker);
     }
@@ -938,11 +994,21 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
     }
   })();
 
-  // Visibility change — tick on resume
+  // Visibility change. Two transitions matter when the tab becomes
+  // visible again:
+  //   - Day rollover while the tab was hidden → checkDayRollover resets
+  //     today's counter and re-surfaces the stale banner.
+  //   - System suspend/sleep while the tab was hidden → tick() detects
+  //     the wall-clock jump via lastTickAt and pauses instead of
+  //     finishing a phantom session.
   component.registerDomEvent(document, "visibilitychange", () => {
-    if (!document.hidden) {
-      tick();
-      saveState(state);
-    }
+    if (document.hidden) return;
+    checkDayRollover();
+    tick();
   });
+
+  // Coarser sweep for day rollover while the widget is alive but no
+  // 1s ticker is running (timer paused / never started). The Component
+  // tears the interval down on unload, so no leak risk.
+  component.registerInterval(window.setInterval(checkDayRollover, DAY_CHECK_INTERVAL_MS));
 }
