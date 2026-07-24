@@ -257,16 +257,14 @@
   font-weight: 600;
 }
 
-.worktable .pomo-link-btn {
-  background: none;
-  border: none;
-  color: var(--text-faint, #999);
-  cursor: pointer;
-  font-size: 11px;
-  text-transform: none;
-  letter-spacing: 0;
-  padding: 2px 6px;
+.worktable .pomo-history h4 > span {
+  flex: 1 1 auto;
 }
+
+.worktable .pomo-history h4 > .pomo-link-btn + .pomo-link-btn {
+  margin-left: 2px;
+}
+
 
 .worktable .pomo-link-btn:hover {
   color: var(--accent);
