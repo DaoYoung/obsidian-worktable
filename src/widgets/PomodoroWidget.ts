@@ -428,6 +428,11 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
       el("span", { text: "📝 最近记录" }),
       el("button", {
         className: "pomo-link-btn",
+        attrs: { id: "pomo-btn-clear", type: "button" },
+        text: "清空",
+      }),
+      el("button", {
+        className: "pomo-link-btn",
         attrs: { id: "pomo-btn-export", type: "button" },
         text: "导出 CSV",
       }),
@@ -891,6 +896,16 @@ export function mountPomodoroWidget(containerEl: HTMLElement, context: WidgetCon
         await db.setConfig("auto", state.config.auto);
       } catch (_) {}
     }
+  });
+
+  component.registerDomEvent($('pomo-btn-clear')!, "click", () => {
+    if (!db || !dbReady) return;
+    if (!window.confirm("确定要清空所有番茄钟历史记录吗？此操作不可恢复。")) return;
+    void db.clearSessions()
+      .then(() => refreshHistory())
+      .catch((e) => {
+        window.alert("清空失败: " + String(e));
+      });
   });
 
   component.registerDomEvent($("pomo-btn-export")!, "click", () => {

@@ -96,6 +96,7 @@ export interface PomDb {
   stats(): Promise<PomStats>;
   getConfig(): Promise<PomConfig>;
   setConfig(key: keyof PomConfig, value: boolean): Promise<void>;
+  clearSessions(): Promise<void>;
   /** Remove sessions that share the same completedAt + type + duration. Keeps the lowest id. */
   deduplicateSessions(): Promise<void>;
 }
@@ -298,6 +299,18 @@ export function createPomDb(): PomDb {
     });
   }
 
+  async function clearSessions(): Promise<void> {
+    const db = await open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("sessions", "readwrite");
+      const request = tx.objectStore("sessions").clear();
+      request.onerror = () => reject(request.error);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  }
+
   async function deduplicateSessions(): Promise<void> {
     const db = await open();
     return new Promise((resolve, reject) => {
@@ -320,5 +333,5 @@ export function createPomDb(): PomDb {
     });
   }
 
-  return { open, addSession, recent, stats, getConfig, setConfig, deduplicateSessions };
+  return { open, addSession, recent, stats, getConfig, setConfig, clearSessions, deduplicateSessions };
 }
